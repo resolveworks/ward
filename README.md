@@ -18,13 +18,16 @@ All other container data can disappear when Ward is removed or rebuilt.
 
 ## Prerequisites
 
-The only controller prerequisite is Ansible on the Arch host:
+The controller needs Ansible and the public key
+`/home/johan/.ssh/id_ed25519.pub` on the Arch host:
 
 ```sh
 sudo pacman -S --needed ansible
 ```
 
-Run the local playbooks from the repository root. Pass `-K`
+The inventory selects the matching `/home/johan/.ssh/id_ed25519` private key;
+its contents remain outside this repository. Run the playbooks from the
+repository root. Pass `-K`
 (`--ask-become-pass`) when sudo needs a password.
 
 ## Install and apply
@@ -33,22 +36,24 @@ Run the local playbooks from the repository root. Pass `-K`
 ansible-playbook install.yml -K
 ```
 
-`install.yml` creates Ward when absent and otherwise reconciles its definitions,
-packages, system settings, and `agent` account.
+`install.yml` creates Ward when absent, authorizes the controller public key for
+`root`, and enables Ward at host boot. Once Ward is running, Ansible reconciles
+its packages, system settings, and `agent` account over SSH through the virtual
+Ethernet connection.
 
 Packages from `packages.txt` are reconciled **presence-only**: every declared
 package is installed, but removing a line never uninstalls that package.
 
-Reconciliation requires a stopped container. A running Ward is stopped and
-restored after a successful apply; an initially stopped Ward remains stopped.
-On failure, it remains stopped.
+Routine reconciliation does not stop Ward. An existing installation is stopped
+once if it needs SSH bootstrap files or packages. Later applies restart Ward
+only when `ward.nspawn` or `resources.conf` changes.
 
-## Start and use
+## Use
 
-Start Ward and attach to its shared tmux session as the `agent` user:
+Ward starts automatically. Attach to its shared tmux session as the `agent`
+user:
 
 ```sh
-sudo systemctl start systemd-nspawn@ward.service
 machinectl shell agent@ward /usr/bin/tmux new-session -A -s ward
 ```
 
@@ -58,6 +63,7 @@ extension runtime files concurrently in both.
 ## Administration
 
 ```sh
+ssh root@ward
 machinectl shell root@ward
 machinectl status ward
 journalctl -u systemd-nspawn@ward.service
@@ -66,9 +72,10 @@ sudo systemctl stop systemd-nspawn@ward.service
 
 ## Uninstall
 
-`uninstall.yml` is **destructive and unguarded**. It stops Ward, removes its
-root and host definitions, and reloads systemd. It preserves host packages and
-the two bind-mount sources, and is safe to re-run when Ward is absent.
+`uninstall.yml` is **destructive and unguarded**. It disables and stops Ward,
+removes its root and host definitions, and reloads systemd. It preserves host
+packages and the two bind-mount sources, and is safe to re-run when Ward is
+absent.
 
 ```sh
 ansible-playbook uninstall.yml -K

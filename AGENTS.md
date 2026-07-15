@@ -38,18 +38,20 @@ other abstractions unless necessary.
   dependencies belong to their projects, not Ward. Reconciliation is
   PRESENCE-ONLY: removing a line does not uninstall that package.
 - Prefer fully-qualified `ansible.builtin.*` module names and idempotent
-  modules over `shell`/`command`. Use `connection: local` and `become: true`
-  rather than embedding `sudo` in commands.
+  modules over `shell`/`command`. Run host lifecycle tasks with
+  `connection: local` and `become: true`, and reconcile the running Ward machine
+  over SSH as root. Never embed `sudo` in commands.
 - Install/apply must create Ward when absent and reconcile it when present;
-  do not add a reinstall path. Detect whether `systemd-nspawn@ward.service` is
-  running at apply time. Stop a running Ward before offline reconciliation and
-  restore it only after success. Leave an initially stopped Ward stopped, and
-  leave Ward stopped if reconciliation fails. Reload `systemd`, via a handler
-  flushed before restore, only when copied unit/drop-in definitions changed.
+  do not add a reinstall path. Bootstrap Python, OpenSSH, and the controller's
+  `/home/johan/.ssh/id_ed25519.pub` key offline only when needed. Enable Ward at
+  boot, then perform routine package and machine configuration over SSH without
+  stopping it. Restart Ward only when its nspawn definition or resource limits
+  changed. Reload `systemd`, via a handler flushed before start or restart, only
+  when copied unit/drop-in definitions changed.
 - Uninstall must remain separate, destructive, and unguarded (no prompt or
-  assertion). It must stop Ward, remove its root, nspawn definition, and
-  dedicated service drop-in, reload `systemd`, and remain idempotent when Ward
-  is absent.
+  assertion). It must disable and stop Ward, remove its root, nspawn definition,
+  and dedicated service drop-in, reload `systemd`, and remain idempotent when
+  Ward is absent.
 - Host dependencies installed by install/apply must not be removed by uninstall.
   The host source directories bind-mounted into Ward (/home/johan/Projects,
   /home/johan/.pi) must never be deleted.

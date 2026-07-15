@@ -16,9 +16,10 @@
 
   tasks:
     # Detach bind mounts before deleting the root.
-    - name: Stop the Ward machine if it is running
+    - name: Disable and stop the Ward machine
       ansible.builtin.systemd_service:
         name: "systemd-nspawn@{{ ward_hostname }}.service"
+        enabled: false
         state: stopped
 
     - name: Remove the machine root

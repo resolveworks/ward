@@ -6,4 +6,6 @@ ripgrep
 jq
 curl
 nodejs
+openssh
 pnpm
+python

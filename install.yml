@@ -113,20 +113,32 @@
         owner: root
         group: root
 
+    # File lookups run as the controller user and do not honor become, so read
+    # these root-owned files with modules before inspecting their contents.
+    - name: Read passwd from the machine root
+      ansible.builtin.slurp:
+        src: "{{ ward_root }}/etc/passwd"
+      register: ward_passwd_file
+
+    - name: Read group from the machine root
+      ansible.builtin.slurp:
+        src: "{{ ward_root }}/etc/group"
+      register: ward_group_file
+
     # Snapshot both entries because the user module cannot target another root.
-    - name: Read current agent account state from the machine root
+    - name: Record current agent account state
       ansible.builtin.set_fact:
         ward_agent_passwd_entry: >-
           {{
-            (lookup('file', ward_root ~ '/etc/passwd').splitlines()
-              | select('match', ward_agent_name ~ ':')
-              | list) | first | default('')
+            (ward_passwd_file.content | b64decode).splitlines()
+            | select('match', ward_agent_name ~ ':')
+            | list | first | default('')
           }}
         ward_agent_group_entry: >-
           {{
-            (lookup('file', ward_root ~ '/etc/group').splitlines()
-              | select('match', ward_agent_name ~ ':')
-              | list) | first | default('')
+            (ward_group_file.content | b64decode).splitlines()
+            | select('match', ward_agent_name ~ ':')
+            | list | first | default('')
           }}
 
     - name: Ensure the agent private primary group exists

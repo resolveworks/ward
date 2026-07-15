@@ -1,0 +1,155 @@
+---
+# install.yml - Install or reconcile the Ward systemd-nspawn machine.
+#
+# Idempotent and safe to re-run: it creates the machine when absent and
+# reconciles the declared definitions (ward.nspawn, resources.conf,
+# packages.txt) when present. It does NOT start the machine, does NOT add a
+# reinstall path, and does NOT uninstall (a separate playbook handles that).
+#
+# Run from the repository root with privilege escalation:
+#   ansible-playbook install.yml [-K]
+
+- name: Install and reconcile the Ward nspawn machine
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+
+  vars:
+    # Deliberate values, kept consistent with ward.nspawn, resources.conf and
+    # the documented first-boot settings. Treat as canonical.
+    ward_root: /var/lib/machines/ward
+    ward_hostname: ward
+    ward_locale: en_US.UTF-8
+    ward_timezone: Europe/Amsterdam
+    ward_agent_name: agent
+    ward_agent_uid: 1000
+
+    # Host packages needed to build and manage the machine. These are never
+    # removed by uninstall.
+    host_packages:
+      - arch-install-scripts
+      - systemd
+
+    # Container packages come from packages.txt: one explicit Arch package per
+    # line. Blank lines and comments are ignored.
+    packages_file: "{{ playbook_dir }}/packages.txt"
+    ward_packages: >-
+      {{
+        lookup('file', packages_file).splitlines()
+        | map('trim')
+        | reject('match', '^(#|$)')
+        | list
+      }}
+
+  tasks:
+    - name: Ensure host build and runtime dependencies are installed
+      ansible.builtin.command:
+        argv: "{{ ['pacman', '-S', '--needed', '--noconfirm'] + host_packages }}"
+      register: host_packages_result
+      changed_when: "'there is nothing to do' not in (host_packages_result.stdout | lower)"
+
+    - name: Ensure machine root directory exists
+      ansible.builtin.file:
+        path: "{{ ward_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    # Guarded so it runs only against a root that has not yet been bootstrapped;
+    # pacstrap is not itself idempotent.
+    - name: Bootstrap Arch root with declared packages
+      ansible.builtin.command:
+        argv: "{{ ['pacstrap', '-K', ward_root] + ward_packages }}"
+        creates: "{{ ward_root }}/var/lib/pacman/local"
+
+    # /etc/localtime is not provided by any package; it exists only after the
+    # first-boot settings have been applied, so it is a reliable marker.
+    - name: Detect whether first-boot settings are initialized
+      ansible.builtin.stat:
+        path: "{{ ward_root }}/etc/localtime"
+      register: ward_firstboot
+
+    - name: Initialize first-boot settings (hostname, locale, timezone)
+      ansible.builtin.command:
+        argv:
+          - systemd-firstboot
+          - "--root={{ ward_root }}"
+          - "--hostname={{ ward_hostname }}"
+          - "--locale={{ ward_locale }}"
+          - "--timezone={{ ward_timezone }}"
+      when: not ward_firstboot.stat.exists
+
+    - name: Detect whether the agent user exists in the machine root
+      ansible.builtin.command: "grep -q '^{{ ward_agent_name }}:' {{ ward_root }}/etc/passwd"
+      register: ward_agent_user
+      changed_when: false
+      failed_when: false
+
+    - name: Create the unprivileged agent user
+      ansible.builtin.command:
+        argv:
+          - useradd
+          - "--root={{ ward_root }}"
+          - "--uid={{ ward_agent_uid }}"
+          - --user-group
+          - --create-home
+          - "--shell=/bin/bash"
+          - "{{ ward_agent_name }}"
+      when: ward_agent_user.rc != 0
+
+    - name: Ensure workspace mount point is owned by the agent
+      ansible.builtin.file:
+        path: "{{ ward_root }}/workspace"
+        state: directory
+        owner: "{{ ward_agent_uid }}"
+        group: "{{ ward_agent_uid }}"
+        mode: "0755"
+
+    - name: Ensure agent .pi mount point is owned by the agent
+      ansible.builtin.file:
+        path: "{{ ward_root }}/home/{{ ward_agent_name }}/.pi"
+        state: directory
+        owner: "{{ ward_agent_uid }}"
+        group: "{{ ward_agent_uid }}"
+        mode: "0755"
+
+    - name: Ensure systemd-nspawn config directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/nspawn
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Ensure systemd-nspawn service drop-in directory exists
+      ansible.builtin.file:
+        path: "/etc/systemd/system/systemd-nspawn@{{ ward_hostname }}.service.d"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the nspawn definition
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/ward.nspawn"
+        dest: "/etc/systemd/nspawn/{{ ward_hostname }}.nspawn"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd manager
+
+    - name: Install the resource limits drop-in
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/resources.conf"
+        dest: "/etc/systemd/system/systemd-nspawn@{{ ward_hostname }}.service.d/resources.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd manager
+
+  handlers:
+    - name: Reload systemd manager
+      ansible.builtin.systemd:
+        daemon_reload: true

@@ -15,9 +15,7 @@ Everything else lives in `/var/lib/machines/ward`.
 Run from this repository. Nothing runs automatically.
 
 ```sh
-sudo pacman -S --needed arch-install-scripts systemd-container
-mkdir -p /home/johan/.pi
-chmod 0700 /home/johan/.pi
+sudo pacman -S --needed arch-install-scripts systemd
 sudo mkdir -p /var/lib/machines/ward
 sudo pacstrap -K /var/lib/machines/ward $(< packages.txt)
 
@@ -40,15 +38,11 @@ sudo chown 1000:1000 \
 
 The mount-point ownership is required by `owneridmap`.
 
-Link the definitions into systemd:
+Install root-owned copies of the definitions into systemd:
 
 ```sh
-sudo mkdir -p /etc/systemd/nspawn
-sudo ln -s /home/johan/Projects/ward/ward.nspawn \
-  /etc/systemd/nspawn/ward.nspawn
-
-sudo mkdir -p /etc/systemd/system/systemd-nspawn@ward.service.d
-sudo ln -s /home/johan/Projects/ward/resources.conf \
+sudo install -Dm644 ward.nspawn /etc/systemd/nspawn/ward.nspawn
+sudo install -Dm644 resources.conf \
   /etc/systemd/system/systemd-nspawn@ward.service.d/resources.conf
 
 sudo systemctl daemon-reload

@@ -42,12 +42,21 @@ collections, or extra abstractions unless genuinely necessary.
   deliberate. Keep `ward.nspawn`, `resources.conf`, `packages.txt`, and the
   playbook variables consistent with one another.
 - Keep one explicit Arch package per line in `packages.txt`. Project-specific
-  dependencies belong to their projects, not Ward.
+  dependencies belong to their projects, not Ward. Reconciliation is
+  PRESENCE-ONLY: removing a line does not uninstall that package.
 - Prefer fully-qualified `ansible.builtin.*` module names and idempotent
   modules over `shell`/`command`. Use `connection: local` and `become: true`
   rather than embedding `sudo` in commands.
 - Install/apply must be idempotent: create when absent and reconcile when
   present. Do not add a reinstall path.
+- Install/apply must detect at apply time whether
+  `systemd-nspawn@ward.service` is running. If it is running, stop it before
+  any offline-root reconciliation, and after a SUCCESSFUL apply start it again.
+  If it was not running to begin with, leave it stopped; install/apply must
+  never start an initially-stopped machine. If apply fails after stopping,
+  Ward is left stopped rather than booting a partially reconciled image.
+  `systemd` must be reloaded (via a handler flushed before the restore) only
+  when the copied unit/drop-in definitions changed.
 - Uninstall is a separate, explicitly invoked, destructive operation. It must
   be unguarded (no confirmation prompt/assert), stop the machine before
   removing the root, delete the machine root and Ward's installed nspawn
@@ -56,7 +65,6 @@ collections, or extra abstractions unless genuinely necessary.
 - Host dependencies installed by install/apply must not be removed by uninstall.
   The host source directories bind-mounted into Ward (/home/johan/Projects,
   /home/johan/.pi) must never be deleted.
-- Do not start the machine as a side effect of install/apply.
 - Update `README.md` when behavior changes. Wrap prose near 80 columns and use
   fenced `sh` blocks for commands.
 - Do not overwrite unrelated working-tree changes.

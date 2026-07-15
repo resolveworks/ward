@@ -4,16 +4,22 @@
 # Idempotent and safe to re-run: it creates the machine when absent and
 # reconciles the declared definitions (ward.nspawn, resources.conf,
 # packages.txt, hostname/locale/timezone, and the agent account) when present.
-# It does NOT start the machine, does NOT add a reinstall path, and does NOT
-# uninstall (see uninstall.yml for the destructive lifecycle).
+#
+# Running-state handling: at apply time the play detects whether
+# systemd-nspawn@ward.service is running. If it is, Ward is stopped before any
+# offline-root reconciliation (a running container owns its live pacman
+# database and API mounts) and, after a SUCCESSFUL apply, started again. If it
+# was not running to begin with it is left stopped - install/apply never starts
+# an initially-stopped machine. If apply fails after stopping Ward, the play
+# aborts before the restore task, so Ward stays stopped rather than booting a
+# partially reconciled image. systemd is reloaded, via a handler flushed before
+# the restore, only when the copied unit/drop-in definitions actually changed.
+#
+# This adds no reinstall path and does not uninstall (see uninstall.yml for the
+# destructive lifecycle).
 #
 # Run from the repository root with privilege escalation:
 #   ansible-playbook install.yml [-K]
-#
-# NOTE: package reconciliation chroots into the machine root, which must not be
-# running at apply time (a running container owns its live pacman database and
-# API mounts). Stop Ward before reconciling packages:
-#   systemctl stop systemd-nspawn@ward.service
 
 - name: Install and reconcile the Ward nspawn machine
   hosts: localhost
@@ -50,15 +56,41 @@
       }}
 
   tasks:
+    # Capture whether Ward is running before anything mutates state, so apply
+    # can stop a running machine for offline reconciliation and restore only
+    # that same machine afterward. A template instance like systemd-nspawn@ward
+    # is absent from ansible_facts.services until it has been activated at least
+    # once; that (and any non-running state) is treated as "not running".
+    - name: Detect whether the Ward machine is currently running
+      ansible.builtin.service_facts:
+
+    - name: Remember whether Ward was running before this apply
+      ansible.builtin.set_fact:
+        ward_was_running: >-
+          {{
+            (ansible_facts.services['systemd-nspawn@' ~ ward_hostname ~ '.service']
+              | default({})).state | default('') == 'running'
+          }}
+
     # ansible.builtin.package would proxy to community.general.pacman (a
     # third-party collection, intentionally not used here) and needs gathered
     # facts to auto-detect the manager. Running pacman directly with --needed
-    # is the clean built-in path under gather_facts: false.
+    # is the clean built-in path under gather_facts: false. This host-only step
+    # runs while Ward may still be running to minimize the window it is stopped.
     - name: Ensure host build and runtime dependencies are installed
       ansible.builtin.command:
         argv: "{{ ['pacman', '-S', '--needed', '--noconfirm'] + host_packages }}"
       register: host_packages_result
       changed_when: "'there is nothing to do' not in (host_packages_result.stdout | lower)"
+
+    # A running container owns its live pacman database and API mounts, so the
+    # offline-root reconciliation below requires Ward to be stopped. Stop it
+    # only when it was running; an initially-stopped machine is left untouched.
+    - name: Stop the running Ward machine so its offline root can be reconciled
+      ansible.builtin.systemd_service:
+        name: "systemd-nspawn@{{ ward_hostname }}.service"
+        state: stopped
+      when: ward_was_running
 
     - name: Ensure machine root directory exists
       ansible.builtin.file:
@@ -79,8 +111,8 @@
     # first bootstrap, so packages added to packages.txt later would otherwise
     # never reach an existing machine. --needed makes this PRESENCE-ONLY: it
     # installs any missing declared package and never removes anything (neither
-    # undeclared nor manually installed packages). Requires the machine to be
-    # stopped; see the header note.
+    # undeclared nor manually installed packages). It runs against the stopped
+    # root guaranteed by the running-state tasks above.
     - name: Ensure all declared packages are present in the machine
       ansible.builtin.command:
         argv: "{{ ['arch-chroot', ward_root, 'pacman', '--noconfirm', '--needed', '--noprogressbar', '-S'] + ward_packages }}"
@@ -250,6 +282,23 @@
         group: root
         mode: "0644"
       notify: Reload systemd manager
+
+    # Flush handlers here so systemd reloads - only when a unit/drop-in copy
+    # actually changed - before a previously-running Ward is restored. With the
+    # default (non-forced) handler policy, a failed task above aborts the play
+    # before this point, leaving a stopped Ward stopped instead of booting a
+    # partially reconciled image.
+    - name: Flush handlers so changed unit/drop-in definitions are reloaded
+      ansible.builtin.meta: flush_handlers
+
+    # Restore Ward only if it was running when apply began; never start an
+    # initially-stopped machine. state: started is a no-op if it is somehow
+    # already active.
+    - name: Restart the Ward machine if it was running before this apply
+      ansible.builtin.systemd_service:
+        name: "systemd-nspawn@{{ ward_hostname }}.service"
+        state: started
+      when: ward_was_running
 
   handlers:
     - name: Reload systemd manager

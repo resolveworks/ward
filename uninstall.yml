@@ -1,17 +1,8 @@
 ---
-# uninstall.yml - Destructively remove the Ward nspawn machine and its host
-# definitions.
+# Destructively remove Ward without confirmation. Host dependencies and bind
+# mount sources are preserved. Safe to re-run when Ward is absent.
 #
-# This playbook is intentionally UNGUARDED: invoking it removes Ward with no
-# confirmation prompt. It is idempotent and safe to re-run when Ward is already
-# gone. It stops the machine (which detaches the host bind mounts), deletes the
-# entire machine root, removes the installed nspawn definition and the dedicated
-# service drop-in directory, and reloads systemd. It does NOT remove host
-# dependency packages and does NOT touch the host source directories that are
-# bind-mounted into Ward (/home/johan/Projects, /home/johan/.pi).
-#
-# Run from the repository root with privilege escalation:
-#   ansible-playbook uninstall.yml [-K]
+# Run: ansible-playbook uninstall.yml [-K]
 
 - name: Uninstall the Ward nspawn machine
   hosts: localhost
@@ -24,17 +15,12 @@
     ward_hostname: ward
 
   tasks:
-    # Stop first so the host bind mounts are detached before the root is
-    # deleted. state: stopped is a no-op when the unit is already inactive;
-    # the systemd-nspawn@.service template is always present (systemd package),
-    # so the ward instance resolves and this never fails for a missing unit.
+    # Detach bind mounts before deleting the root.
     - name: Stop the Ward machine if it is running
       ansible.builtin.systemd_service:
         name: "systemd-nspawn@{{ ward_hostname }}.service"
         state: stopped
 
-    # Destructive: removes the entire container root. The host bind-mount
-    # sources live under /home/johan, never under ward_root, so they survive.
     - name: Remove the machine root
       ansible.builtin.file:
         path: "{{ ward_root }}"
@@ -46,8 +32,6 @@
         state: absent
       notify: Reload systemd manager
 
-    # The dedicated drop-in directory holds only resources.conf; removing the
-    # whole directory is clean and convergent.
     - name: Remove the Ward service drop-in directory
       ansible.builtin.file:
         path: "/etc/systemd/system/systemd-nspawn@{{ ward_hostname }}.service.d"
@@ -55,9 +39,6 @@
       notify: Reload systemd manager
 
   handlers:
-    # Handlers run at the end of the play, i.e. after the definition files are
-    # removed, so the daemon reload reflects their absence. It is only notified
-    # when a definition actually changed, keeping re-runs idempotent.
     - name: Reload systemd manager
       ansible.builtin.systemd_service:
         daemon_reload: true

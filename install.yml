@@ -1,25 +1,9 @@
 ---
-# install.yml - Install or reconcile the Ward systemd-nspawn machine.
+# Install or reconcile Ward. A running machine is stopped for offline
+# changes and restored only after a successful apply. An initially stopped
+# machine remains stopped.
 #
-# Idempotent and safe to re-run: it creates the machine when absent and
-# reconciles the declared definitions (ward.nspawn, resources.conf,
-# packages.txt, hostname/locale/timezone, and the agent account) when present.
-#
-# Running-state handling: at apply time the play detects whether
-# systemd-nspawn@ward.service is running. If it is, Ward is stopped before any
-# offline-root reconciliation (a running container owns its live pacman
-# database and API mounts) and, after a SUCCESSFUL apply, started again. If it
-# was not running to begin with it is left stopped - install/apply never starts
-# an initially-stopped machine. If apply fails after stopping Ward, the play
-# aborts before the restore task, so Ward stays stopped rather than booting a
-# partially reconciled image. systemd is reloaded, via a handler flushed before
-# the restore, only when the copied unit/drop-in definitions actually changed.
-#
-# This adds no reinstall path and does not uninstall (see uninstall.yml for the
-# destructive lifecycle).
-#
-# Run from the repository root with privilege escalation:
-#   ansible-playbook install.yml [-K]
+# Run: ansible-playbook install.yml [-K]
 
 - name: Install and reconcile the Ward nspawn machine
   hosts: localhost
@@ -28,24 +12,21 @@
   gather_facts: false
 
   vars:
-    # Deliberate values, kept consistent with ward.nspawn, resources.conf and
-    # the documented first-boot settings. Treat as canonical.
+    # Keep these values consistent with ward.nspawn and resources.conf.
     ward_root: /var/lib/machines/ward
     ward_hostname: ward
     ward_locale: en_US.UTF-8
     ward_timezone: Europe/Amsterdam
     ward_agent_name: agent
-    # UID 1000 is also the GID of the agent's user-private primary group.
+    # Also used for the agent's private primary group.
     ward_agent_uid: 1000
 
-    # Host packages needed to build and manage the machine. These are never
-    # removed by uninstall.
+    # Uninstall does not remove host dependencies.
     host_packages:
       - arch-install-scripts
       - systemd
 
-    # Container packages come from packages.txt: one explicit Arch package per
-    # line. Blank lines and comments are ignored.
+    # Blank lines and comments in packages.txt are ignored.
     packages_file: "{{ playbook_dir }}/packages.txt"
     ward_packages: >-
       {{
@@ -56,11 +37,7 @@
       }}
 
   tasks:
-    # Capture whether Ward is running before anything mutates state, so apply
-    # can stop a running machine for offline reconciliation and restore only
-    # that same machine afterward. A template instance like systemd-nspawn@ward
-    # is absent from ansible_facts.services until it has been activated at least
-    # once; that (and any non-running state) is treated as "not running".
+    # An instance may be absent from service facts until first activation.
     - name: Detect whether the Ward machine is currently running
       ansible.builtin.service_facts:
 
@@ -72,20 +49,16 @@
               | default({})).state | default('') == 'running'
           }}
 
-    # ansible.builtin.package would proxy to community.general.pacman (a
-    # third-party collection, intentionally not used here) and needs gathered
-    # facts to auto-detect the manager. Running pacman directly with --needed
-    # is the clean built-in path under gather_facts: false. This host-only step
-    # runs while Ward may still be running to minimize the window it is stopped.
+    # The package module needs community.general.pacman and gathered facts.
+    # Run this host-only step before stopping Ward to minimize downtime.
     - name: Ensure host build and runtime dependencies are installed
       ansible.builtin.command:
         argv: "{{ ['pacman', '-S', '--needed', '--noconfirm'] + host_packages }}"
       register: host_packages_result
       changed_when: "'there is nothing to do' not in (host_packages_result.stdout | lower)"
 
-    # A running container owns its live pacman database and API mounts, so the
-    # offline-root reconciliation below requires Ward to be stopped. Stop it
-    # only when it was running; an initially-stopped machine is left untouched.
+    # Offline reconciliation requires the container's package database and
+    # API mounts to be inactive.
     - name: Stop the running Ward machine so its offline root can be reconciled
       ansible.builtin.systemd_service:
         name: "systemd-nspawn@{{ ward_hostname }}.service"
@@ -100,31 +73,20 @@
         group: root
         mode: "0755"
 
-    # Guarded so it runs only against a root that has not yet been bootstrapped;
-    # pacstrap is not itself idempotent.
+    # pacstrap is not idempotent, so run it only for an unbootstrapped root.
     - name: Bootstrap Arch root with declared packages
       ansible.builtin.command:
         argv: "{{ ['pacstrap', '-K', ward_root] + ward_packages }}"
         creates: "{{ ward_root }}/var/lib/pacman/local"
 
-    # Reconcile container packages against packages.txt. pacstrap only runs on
-    # first bootstrap, so packages added to packages.txt later would otherwise
-    # never reach an existing machine. --needed makes this PRESENCE-ONLY: it
-    # installs any missing declared package and never removes anything (neither
-    # undeclared nor manually installed packages). It runs against the stopped
-    # root guaranteed by the running-state tasks above.
+    # Presence-only: install missing declarations without removing packages.
     - name: Ensure all declared packages are present in the machine
       ansible.builtin.command:
         argv: "{{ ['arch-chroot', ward_root, 'pacman', '--noconfirm', '--needed', '--noprogressbar', '-S'] + ward_packages }}"
       register: ward_packages_result
       changed_when: "'there is nothing to do' not in (ward_packages_result.stdout | lower)"
 
-    # The three first-boot settings are converged directly on the files that
-    # systemd-firstboot(1) controls (/etc/hostname, /etc/locale.conf and the
-    # /etc/localtime zoneinfo symlink). Unlike systemd-firstboot, which only
-    # writes absent files (it needs --force to repair drift), these idempotent
-    # modules also correct drift on every apply. They operate on the filesystem
-    # directly, just like systemd-firstboot does for an offline image.
+    # Manage first-boot files directly so later applies also correct drift.
     - name: Converge hostname
       ansible.builtin.copy:
         dest: "{{ ward_root }}/etc/hostname"
@@ -146,16 +108,12 @@
         src: "/usr/share/zoneinfo/{{ ward_timezone }}"
         dest: "{{ ward_root }}/etc/localtime"
         state: link
-        # force lets the link converge whether dest is absent, a divergent
-        # symlink, or a copied file; it is a no-op when already correct.
+        # Replace either a divergent symlink or a copied file.
         force: true
         owner: root
         group: root
 
-    # Snapshot the agent's passwd/group entries once, after bootstrap, so the
-    # create-vs-reconcile decisions use consistent state. Reading these
-    # well-defined colon-delimited files via lookup avoids fragile shell
-    # parsing and there is no built-in module that targets an alternate root.
+    # Snapshot both entries because the user module cannot target another root.
     - name: Read current agent account state from the machine root
       ansible.builtin.set_fact:
         ward_agent_passwd_entry: >-
@@ -181,8 +139,7 @@
       when: ward_agent_group_entry | length == 0
       changed_when: true
 
-    # groupmod fails clearly if GID 1000 is already held by another group
-    # instead of silently corrupting group ownership.
+    # groupmod reports a conflict if the requested GID is already in use.
     - name: Reconcile the agent group GID
       ansible.builtin.command:
         argv:
@@ -209,11 +166,7 @@
       when: ward_agent_passwd_entry | length == 0
       changed_when: true
 
-    # Repair drift in uid/gid/home/shell in one pass. usermod leaves any field
-    # already at its declared value untouched, and fails clearly on genuine
-    # conflicts (e.g. UID 1000 already used by a different user, or a missing
-    # target group). --home without --move-home only updates the passwd entry,
-    # never relocating the bind-mounted .pi directory.
+    # Without --move-home, --home updates passwd without moving mounted data.
     - name: Reconcile the agent account attributes
       ansible.builtin.command:
         argv:
@@ -283,17 +236,12 @@
         mode: "0644"
       notify: Reload systemd manager
 
-    # Flush handlers here so systemd reloads - only when a unit/drop-in copy
-    # actually changed - before a previously-running Ward is restored. With the
-    # default (non-forced) handler policy, a failed task above aborts the play
-    # before this point, leaving a stopped Ward stopped instead of booting a
-    # partially reconciled image.
+    # Reload changed definitions before restoring a previously running Ward.
+    # A failure above skips both this flush and the restore.
     - name: Flush handlers so changed unit/drop-in definitions are reloaded
       ansible.builtin.meta: flush_handlers
 
-    # Restore Ward only if it was running when apply began; never start an
-    # initially-stopped machine. state: started is a no-op if it is somehow
-    # already active.
+    # Never start a machine that was stopped when the apply began.
     - name: Restart the Ward machine if it was running before this apply
       ansible.builtin.systemd_service:
         name: "systemd-nspawn@{{ ward_hostname }}.service"

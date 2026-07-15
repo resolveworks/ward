@@ -2,36 +2,29 @@
 
 ## Purpose
 
-Ward is a small Ansible project that defines one long-lived Arch Linux
-`systemd-nspawn` machine for pi, its child agents, and their shared tmux
-server. Playbooks install/apply the machine and reconcile its declared
-definitions; they are run locally with privilege escalation.
-
-Persistent data lives only in host bind mounts:
+Ward defines one long-lived Arch Linux `systemd-nspawn` machine for pi, child
+agents, and their shared tmux server. Local Ansible playbooks manage it with
+privilege escalation. Only these host bind mounts persist:
 
 ```text
 /home/johan/Projects -> /workspace
 /home/johan/.pi       -> /home/agent/.pi
 ```
 
-The container root (`/var/lib/machines/ward`) need not preserve data.
+The container root (`/var/lib/machines/ward`) is disposable.
 
 ## Repository contents
 
-- `ward.nspawn` - machine definition (boot, hostname, private user namespace,
-  id-mapped bind mounts, virtual Ethernet).
-- `resources.conf` - `systemd-nspawn@ward.service.d` drop-in (resource limits).
-- `packages.txt` - container packages, one explicit Arch package per line.
-- `ansible.cfg`, `inventory.ini` - localhost Ansible configuration.
-- `install.yml` - install/apply playbook (idempotent; create when absent,
-  reconcile when present).
-- `uninstall.yml` - destructive uninstall playbook (removes the machine root
-  and Ward's host definitions; unguarded, idempotent when absent).
+- `ward.nspawn` - machine definition.
+- `resources.conf` - service resource limits.
+- `packages.txt` - container package declarations.
+- `ansible.cfg`, `inventory.ini` - local Ansible configuration.
+- `install.yml`, `uninstall.yml` - lifecycle playbooks.
 - `README.md` - user documentation.
 
-Keep the repository limited to these files plus additional playbooks and
-their documentation. Do not add roles, custom plugins, third-party
-collections, or extra abstractions unless genuinely necessary.
+Keep the repository limited to these files, additional playbooks, and their
+documentation. Do not add roles, custom plugins, third-party collections, or
+other abstractions unless necessary.
 
 ## Rules
 
@@ -47,21 +40,16 @@ collections, or extra abstractions unless genuinely necessary.
 - Prefer fully-qualified `ansible.builtin.*` module names and idempotent
   modules over `shell`/`command`. Use `connection: local` and `become: true`
   rather than embedding `sudo` in commands.
-- Install/apply must be idempotent: create when absent and reconcile when
-  present. Do not add a reinstall path.
-- Install/apply must detect at apply time whether
-  `systemd-nspawn@ward.service` is running. If it is running, stop it before
-  any offline-root reconciliation, and after a SUCCESSFUL apply start it again.
-  If it was not running to begin with, leave it stopped; install/apply must
-  never start an initially-stopped machine. If apply fails after stopping,
-  Ward is left stopped rather than booting a partially reconciled image.
-  `systemd` must be reloaded (via a handler flushed before the restore) only
-  when the copied unit/drop-in definitions changed.
-- Uninstall is a separate, explicitly invoked, destructive operation. It must
-  be unguarded (no confirmation prompt/assert), stop the machine before
-  removing the root, delete the machine root and Ward's installed nspawn
-  definition and dedicated service drop-in, reload systemd, and stay idempotent
-  when Ward is already absent.
+- Install/apply must create Ward when absent and reconcile it when present;
+  do not add a reinstall path. Detect whether `systemd-nspawn@ward.service` is
+  running at apply time. Stop a running Ward before offline reconciliation and
+  restore it only after success. Leave an initially stopped Ward stopped, and
+  leave Ward stopped if reconciliation fails. Reload `systemd`, via a handler
+  flushed before restore, only when copied unit/drop-in definitions changed.
+- Uninstall must remain separate, destructive, and unguarded (no prompt or
+  assertion). It must stop Ward, remove its root, nspawn definition, and
+  dedicated service drop-in, reload `systemd`, and remain idempotent when Ward
+  is absent.
 - Host dependencies installed by install/apply must not be removed by uninstall.
   The host source directories bind-mounted into Ward (/home/johan/Projects,
   /home/johan/.pi) must never be deleted.

@@ -1,0 +1,11 @@
+[Exec]
+Boot=yes
+Hostname=ward
+PrivateUsers=pick
+
+[Files]
+PrivateUsersOwnership=auto
+Bind=/home/johan/Projects:/workspace:owneridmap
+
+[Network]
+VirtualEthernet=yes

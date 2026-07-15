@@ -1,0 +1,11 @@
+base
+base-devel
+git
+tmux
+ripgrep
+jq
+curl
+nodejs
+pnpm
+chromium
+xorg-server-xvfb

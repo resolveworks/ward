@@ -3,11 +3,17 @@
 #
 # Idempotent and safe to re-run: it creates the machine when absent and
 # reconciles the declared definitions (ward.nspawn, resources.conf,
-# packages.txt) when present. It does NOT start the machine, does NOT add a
-# reinstall path, and does NOT uninstall (a separate playbook handles that).
+# packages.txt, hostname/locale/timezone, and the agent account) when present.
+# It does NOT start the machine, does NOT add a reinstall path, and does NOT
+# uninstall (see uninstall.yml for the destructive lifecycle).
 #
 # Run from the repository root with privilege escalation:
 #   ansible-playbook install.yml [-K]
+#
+# NOTE: package reconciliation chroots into the machine root, which must not be
+# running at apply time (a running container owns its live pacman database and
+# API mounts). Stop Ward before reconciling packages:
+#   systemctl stop systemd-nspawn@ward.service
 
 - name: Install and reconcile the Ward nspawn machine
   hosts: localhost
@@ -23,6 +29,7 @@
     ward_locale: en_US.UTF-8
     ward_timezone: Europe/Amsterdam
     ward_agent_name: agent
+    # UID 1000 is also the GID of the agent's user-private primary group.
     ward_agent_uid: 1000
 
     # Host packages needed to build and manage the machine. These are never
@@ -43,6 +50,10 @@
       }}
 
   tasks:
+    # ansible.builtin.package would proxy to community.general.pacman (a
+    # third-party collection, intentionally not used here) and needs gathered
+    # facts to auto-detect the manager. Running pacman directly with --needed
+    # is the clean built-in path under gather_facts: false.
     - name: Ensure host build and runtime dependencies are installed
       ansible.builtin.command:
         argv: "{{ ['pacman', '-S', '--needed', '--noconfirm'] + host_packages }}"
@@ -64,40 +75,131 @@
         argv: "{{ ['pacstrap', '-K', ward_root] + ward_packages }}"
         creates: "{{ ward_root }}/var/lib/pacman/local"
 
-    # /etc/localtime is not provided by any package; it exists only after the
-    # first-boot settings have been applied, so it is a reliable marker.
-    - name: Detect whether first-boot settings are initialized
-      ansible.builtin.stat:
-        path: "{{ ward_root }}/etc/localtime"
-      register: ward_firstboot
+    # Reconcile container packages against packages.txt. pacstrap only runs on
+    # first bootstrap, so packages added to packages.txt later would otherwise
+    # never reach an existing machine. --needed makes this PRESENCE-ONLY: it
+    # installs any missing declared package and never removes anything (neither
+    # undeclared nor manually installed packages). Requires the machine to be
+    # stopped; see the header note.
+    - name: Ensure all declared packages are present in the machine
+      ansible.builtin.command:
+        argv: "{{ ['arch-chroot', ward_root, 'pacman', '--noconfirm', '--needed', '--noprogressbar', '-S'] + ward_packages }}"
+      register: ward_packages_result
+      changed_when: "'there is nothing to do' not in (ward_packages_result.stdout | lower)"
 
-    - name: Initialize first-boot settings (hostname, locale, timezone)
+    # The three first-boot settings are converged directly on the files that
+    # systemd-firstboot(1) controls (/etc/hostname, /etc/locale.conf and the
+    # /etc/localtime zoneinfo symlink). Unlike systemd-firstboot, which only
+    # writes absent files (it needs --force to repair drift), these idempotent
+    # modules also correct drift on every apply. They operate on the filesystem
+    # directly, just like systemd-firstboot does for an offline image.
+    - name: Converge hostname
+      ansible.builtin.copy:
+        dest: "{{ ward_root }}/etc/hostname"
+        content: "{{ ward_hostname }}\n"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Converge system locale
+      ansible.builtin.copy:
+        dest: "{{ ward_root }}/etc/locale.conf"
+        content: "LANG={{ ward_locale }}\n"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Converge timezone
+      ansible.builtin.file:
+        src: "/usr/share/zoneinfo/{{ ward_timezone }}"
+        dest: "{{ ward_root }}/etc/localtime"
+        state: link
+        # force lets the link converge whether dest is absent, a divergent
+        # symlink, or a copied file; it is a no-op when already correct.
+        force: true
+        owner: root
+        group: root
+
+    # Snapshot the agent's passwd/group entries once, after bootstrap, so the
+    # create-vs-reconcile decisions use consistent state. Reading these
+    # well-defined colon-delimited files via lookup avoids fragile shell
+    # parsing and there is no built-in module that targets an alternate root.
+    - name: Read current agent account state from the machine root
+      ansible.builtin.set_fact:
+        ward_agent_passwd_entry: >-
+          {{
+            (lookup('file', ward_root ~ '/etc/passwd').splitlines()
+              | select('match', ward_agent_name ~ ':')
+              | list) | first | default('')
+          }}
+        ward_agent_group_entry: >-
+          {{
+            (lookup('file', ward_root ~ '/etc/group').splitlines()
+              | select('match', ward_agent_name ~ ':')
+              | list) | first | default('')
+          }}
+
+    - name: Ensure the agent private primary group exists
       ansible.builtin.command:
         argv:
-          - systemd-firstboot
+          - groupadd
           - "--root={{ ward_root }}"
-          - "--hostname={{ ward_hostname }}"
-          - "--locale={{ ward_locale }}"
-          - "--timezone={{ ward_timezone }}"
-      when: not ward_firstboot.stat.exists
+          - "--gid={{ ward_agent_uid }}"
+          - "{{ ward_agent_name }}"
+      when: ward_agent_group_entry | length == 0
+      changed_when: true
 
-    - name: Detect whether the agent user exists in the machine root
-      ansible.builtin.command: "grep -q '^{{ ward_agent_name }}:' {{ ward_root }}/etc/passwd"
-      register: ward_agent_user
-      changed_when: false
-      failed_when: false
+    # groupmod fails clearly if GID 1000 is already held by another group
+    # instead of silently corrupting group ownership.
+    - name: Reconcile the agent group GID
+      ansible.builtin.command:
+        argv:
+          - groupmod
+          - "--root={{ ward_root }}"
+          - "--gid={{ ward_agent_uid }}"
+          - "{{ ward_agent_name }}"
+      when:
+        - ward_agent_group_entry | length > 0
+        - (ward_agent_group_entry.split(':')[2] | default('') | int) != (ward_agent_uid | int)
+      changed_when: true
 
-    - name: Create the unprivileged agent user
+    - name: Ensure the unprivileged agent user exists
       ansible.builtin.command:
         argv:
           - useradd
           - "--root={{ ward_root }}"
           - "--uid={{ ward_agent_uid }}"
-          - --user-group
+          - "--gid={{ ward_agent_uid }}"
+          - "--home-dir=/home/{{ ward_agent_name }}"
           - --create-home
           - "--shell=/bin/bash"
           - "{{ ward_agent_name }}"
-      when: ward_agent_user.rc != 0
+      when: ward_agent_passwd_entry | length == 0
+      changed_when: true
+
+    # Repair drift in uid/gid/home/shell in one pass. usermod leaves any field
+    # already at its declared value untouched, and fails clearly on genuine
+    # conflicts (e.g. UID 1000 already used by a different user, or a missing
+    # target group). --home without --move-home only updates the passwd entry,
+    # never relocating the bind-mounted .pi directory.
+    - name: Reconcile the agent account attributes
+      ansible.builtin.command:
+        argv:
+          - usermod
+          - "--root={{ ward_root }}"
+          - "--uid={{ ward_agent_uid }}"
+          - "--gid={{ ward_agent_uid }}"
+          - "--home=/home/{{ ward_agent_name }}"
+          - "--shell=/bin/bash"
+          - "{{ ward_agent_name }}"
+      when:
+        - ward_agent_passwd_entry | length > 0
+        - >-
+          (ward_agent_passwd_entry.split(':')[2] | default('') | int) != (ward_agent_uid | int)
+          or (ward_agent_passwd_entry.split(':')[3] | default('') | int) != (ward_agent_uid | int)
+          or (ward_agent_passwd_entry.split(':')[5] | default('')) != ('/home/' ~ ward_agent_name)
+          or (ward_agent_passwd_entry.split(':')[6] | default('')) != '/bin/bash'
+      changed_when: true
 
     - name: Ensure workspace mount point is owned by the agent
       ansible.builtin.file:
@@ -151,5 +253,5 @@
 
   handlers:
     - name: Reload systemd manager
-      ansible.builtin.systemd:
+      ansible.builtin.systemd_service:
         daemon_reload: true

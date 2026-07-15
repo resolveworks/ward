@@ -25,12 +25,13 @@ The container root (`/var/lib/machines/ward`) need not preserve data.
 - `ansible.cfg`, `inventory.ini` - localhost Ansible configuration.
 - `install.yml` - install/apply playbook (idempotent; create when absent,
   reconcile when present).
+- `uninstall.yml` - destructive uninstall playbook (removes the machine root
+  and Ward's host definitions; unguarded, idempotent when absent).
 - `README.md` - user documentation.
 
-Keep the repository limited to these files plus any later playbook (for
-example `uninstall.yml`) and its documentation. Do not add roles, custom
-plugins, third-party collections, or extra abstractions unless genuinely
-necessary.
+Keep the repository limited to these files plus additional playbooks and
+their documentation. Do not add roles, custom plugins, third-party
+collections, or extra abstractions unless genuinely necessary.
 
 ## Rules
 
@@ -46,9 +47,15 @@ necessary.
   modules over `shell`/`command`. Use `connection: local` and `become: true`
   rather than embedding `sudo` in commands.
 - Install/apply must be idempotent: create when absent and reconcile when
-  present. Do not add a reinstall path. Uninstall is a separate, explicitly
-  invoked, destructive operation.
+  present. Do not add a reinstall path.
+- Uninstall is a separate, explicitly invoked, destructive operation. It must
+  be unguarded (no confirmation prompt/assert), stop the machine before
+  removing the root, delete the machine root and Ward's installed nspawn
+  definition and dedicated service drop-in, reload systemd, and stay idempotent
+  when Ward is already absent.
 - Host dependencies installed by install/apply must not be removed by uninstall.
+  The host source directories bind-mounted into Ward (/home/johan/Projects,
+  /home/johan/.pi) must never be deleted.
 - Do not start the machine as a side effect of install/apply.
 - Update `README.md` when behavior changes. Wrap prose near 80 columns and use
   fenced `sh` blocks for commands.
@@ -68,6 +75,8 @@ git diff --check
 git diff
 ansible-playbook install.yml --syntax-check
 ansible-playbook install.yml --list-tasks
+ansible-playbook uninstall.yml --syntax-check
+ansible-playbook uninstall.yml --list-tasks
 ```
 
 Host validation (performed by the user, not the agent) must confirm writable

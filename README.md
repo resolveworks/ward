@@ -4,9 +4,12 @@ Ward is one long-lived Arch Linux `systemd-nspawn` machine for pi, its child
 agents, and their shared tmux server.
 
 This repository is only the machine definition. Nothing from it is copied into
-the machine. `/home/johan/Projects` is bind-mounted read-write at `/workspace`.
-Everything else, including the agent's ordinary `/home/agent`, lives in the
-machine root at `/var/lib/machines/ward`.
+the machine:
+
+- `/home/johan/Projects` is bind-mounted read-write at `/workspace`.
+- `/home/johan/.pi` is bind-mounted read-write at `/home/agent/.pi`.
+- The rest of `/home/agent` lives in the machine root at
+  `/var/lib/machines/ward`.
 
 ## Files
 
@@ -29,15 +32,17 @@ Install the host tools:
 sudo pacman -S --needed arch-install-scripts systemd-container
 ```
 
-Create the container root:
+Create the host pi directory and container root:
 
 ```sh
+install -d -m 0700 /home/johan/.pi
 sudo install -d /var/lib/machines/ward
 sudo pacstrap -K /var/lib/machines/ward $(< packages.txt)
 ```
 
-Initialize the root and create the unprivileged user. The `/workspace` mount
-point must be owned by `agent` for the `owneridmap` bind in `ward.nspawn`.
+Initialize the root and create the unprivileged user. The `/workspace` and
+`/home/agent/.pi` mount points must be owned by `agent` for the `owneridmap`
+binds in `ward.nspawn`.
 
 ```sh
 sudo systemd-firstboot \
@@ -51,6 +56,7 @@ sudo systemd-nspawn -D /var/lib/machines/ward \
   --shell /bin/bash agent
 
 sudo install -d -o 1000 -g 1000 /var/lib/machines/ward/workspace
+sudo install -d -o 1000 -g 1000 /var/lib/machines/ward/home/agent/.pi
 ```
 
 Link the definitions into the locations read by systemd:
@@ -87,8 +93,10 @@ sudo systemctl stop systemd-nspawn@ward.service
 ```
 
 Install pi, its extensions, provider credentials, and project-specific
-toolchains from inside Ward. Their user state belongs in `/home/agent`. Add
-required system packages to `packages.txt` so the environment is documented.
+toolchains from inside Ward. Pi reads the same `.pi` directory on the host and
+in Ward. Avoid running host and container pi processes that use the same
+session or extension runtime files concurrently. Add required system packages
+to `packages.txt` so the environment is documented.
 
 ## Networking
 
@@ -100,16 +108,18 @@ around an unconfigured veth without considering access to host-local services.
 
 ## Rebuild
 
-The agent home is part of the machine root. Deleting the root therefore also
-deletes pi state, credentials, configuration, and caches. Back up anything you
-want to retain before rebuilding:
+Most of the agent home is part of the machine root. Deleting the root therefore
+deletes its credentials, configuration, and caches unless they are stored in
+the bind-mounted `.pi` directory. Back up anything else you want to retain
+before rebuilding:
 
 ```sh
 sudo systemctl stop systemd-nspawn@ward.service
 sudo rm -rf --one-file-system /var/lib/machines/ward
 ```
 
-The bind-mounted project tree is not deleted with the machine root.
+The bind-mounted project tree and host `.pi` directory are not deleted with the
+machine root.
 
 ## Before relying on it
 

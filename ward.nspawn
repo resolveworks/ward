@@ -6,6 +6,7 @@ PrivateUsers=pick
 [Files]
 PrivateUsersOwnership=auto
 Bind=/home/johan/Projects:/workspace:owneridmap
+Bind=/home/johan/.pi:/home/agent/.pi:owneridmap
 
 [Network]
 VirtualEthernet=yes

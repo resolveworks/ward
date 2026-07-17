@@ -11,6 +11,7 @@ PrivateUsersOwnership=auto
 # the kernel and source filesystems.
 Bind=/home/johan/Projects:/workspace:owneridmap
 Bind=/home/johan/.pi:/home/agent/.pi:owneridmap
+BindReadOnly=/home/johan/.tmux.conf:/home/agent/.tmux.conf:owneridmap
 
 [Network]
 VirtualEthernet=yes

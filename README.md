@@ -6,24 +6,26 @@ reconcile it on an Arch Linux host.
 
 ## Model
 
-The container root `/var/lib/machines/ward` is disposable. Only two host
-directories persist through bind mounts:
+The container root `/var/lib/machines/ward` is disposable. Only these host
+paths persist through bind mounts:
 
 ```text
-/home/johan/Projects  -> /workspace
-/home/johan/.pi       -> /home/agent/.pi
+/home/johan/Projects   -> /workspace
+/home/johan/.pi        -> /home/agent/.pi
+/home/johan/.tmux.conf -> /home/agent/.tmux.conf (read-only)
 ```
 
 All other container data can disappear when Ward is removed or rebuilt. The
 machine root contains no required durable state: the repository, host
-prerequisites, and the two bind-mount sources are sufficient to reconstruct it.
+prerequisites, and the bind-mount sources are sufficient to reconstruct it.
 Rebuild the disposable root instead of maintaining migrations for obsolete
 internal state.
 
 ## Prerequisites
 
-The controller needs Ansible and the public key
-`/home/johan/.ssh/id_ed25519.pub` on the Arch host:
+The controller needs Ansible, the public key
+`/home/johan/.ssh/id_ed25519.pub`, and a regular `/home/johan/.tmux.conf` file
+on the Arch host:
 
 ```sh
 sudo pacman -S --needed ansible
@@ -79,8 +81,7 @@ sudo systemctl stop systemd-nspawn@ward.service
 
 `uninstall.yml` is **destructive and unguarded**. It disables and stops Ward,
 removes its root and host definitions, and reloads systemd. It preserves host
-packages and the two bind-mount sources, and is safe to re-run when Ward is
-absent.
+packages and the bind-mount sources, and is safe to re-run when Ward is absent.
 
 ```sh
 ansible-playbook uninstall.yml -K

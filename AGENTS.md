@@ -7,13 +7,14 @@ agents, and their shared tmux server. Local Ansible playbooks manage it with
 privilege escalation. Only these host bind mounts persist:
 
 ```text
-/home/johan/Projects -> /workspace
-/home/johan/.pi       -> /home/agent/.pi
+/home/johan/Projects   -> /workspace
+/home/johan/.pi        -> /home/agent/.pi
+/home/johan/.tmux.conf -> /home/agent/.tmux.conf (read-only)
 ```
 
 The container root (`/var/lib/machines/ward`) is disposable and must contain no
 required durable state. A clean uninstall followed by install must reconstruct
-Ward from the repository, host prerequisites, and the two bind-mount sources.
+Ward from the repository, host prerequisites, and the bind-mount sources.
 Runtime state elsewhere in the root is expendable and must never become a
 provisioning input.
 
@@ -64,8 +65,8 @@ other abstractions unless necessary.
   and dedicated service drop-in, reload `systemd`, and remain idempotent when
   Ward is absent.
 - Host dependencies installed by install/apply must not be removed by uninstall.
-  The host source directories bind-mounted into Ward (/home/johan/Projects,
-  /home/johan/.pi) must never be deleted.
+  The host sources bind-mounted into Ward (`/home/johan/Projects`,
+  `/home/johan/.pi`, and `/home/johan/.tmux.conf`) must never be deleted.
 - Update `README.md` when behavior changes. Wrap prose near 80 columns and use
   fenced `sh` blocks for commands.
 - Do not overwrite unrelated working-tree changes.

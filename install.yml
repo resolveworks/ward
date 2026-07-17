@@ -17,6 +17,7 @@
     ward_agent_name: agent
     ward_agent_uid: 1000
     ward_ssh_public_key_file: /home/johan/.ssh/id_ed25519.pub
+    ward_tmux_config_file: /home/johan/.tmux.conf
 
     # Uninstall does not remove host dependencies.
     host_packages:
@@ -55,6 +56,16 @@
         argv: "{{ ['pacstrap', '-K', ward_root] + ward_packages }}"
         creates: "{{ ward_root }}/var/lib/pacman/local"
 
+    - name: Check for the host tmux configuration
+      ansible.builtin.stat:
+        path: "{{ ward_tmux_config_file }}"
+      register: ward_tmux_config
+
+    - name: Require the host tmux configuration
+      ansible.builtin.assert:
+        that: ward_tmux_config.stat.isreg | default(false)
+        fail_msg: "{{ ward_tmux_config_file }} must be a regular file"
+
     # owneridmap derives its mapping from each target owner before mounting.
     - name: Ensure agent-owned bind mount points exist in the machine root
       ansible.builtin.file:
@@ -67,6 +78,17 @@
         - "{{ ward_root }}/workspace"
         - "{{ ward_root }}/home/{{ ward_agent_name }}/.pi"
       register: ward_bind_mount_points
+
+    - name: Ensure the agent tmux config bind target exists
+      ansible.builtin.file:
+        path: "{{ ward_root }}/home/{{ ward_agent_name }}/.tmux.conf"
+        state: touch
+        owner: "{{ ward_agent_uid }}"
+        group: "{{ ward_agent_uid }}"
+        mode: "0644"
+        access_time: preserve
+        modification_time: preserve
+      register: ward_tmux_config_bind_target
 
     - name: Inspect Ward SSH bootstrap files
       ansible.builtin.stat:
@@ -207,6 +229,7 @@
         ward_nspawn_definition.changed
         or ward_resource_limits.changed
         or ward_bind_mount_points.changed
+        or ward_tmux_config_bind_target.changed
 
     - name: Enable Ward at boot and ensure it is running
       ansible.builtin.systemd_service:

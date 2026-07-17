@@ -34,17 +34,6 @@
       }}
 
   tasks:
-    - name: Detect whether the Ward machine is currently running
-      ansible.builtin.service_facts:
-
-    - name: Remember whether Ward was running before this apply
-      ansible.builtin.set_fact:
-        ward_was_running: >-
-          {{
-            (ansible_facts.services['systemd-nspawn@' ~ ward_hostname ~ '.service']
-              | default({})).state | default('') == 'running'
-          }}
-
     # The package module needs community.general.pacman and gathered facts.
     - name: Ensure host build and runtime dependencies are installed
       ansible.builtin.command:
@@ -106,9 +95,7 @@
       ansible.builtin.systemd_service:
         name: "systemd-nspawn@{{ ward_hostname }}.service"
         state: stopped
-      when:
-        - ward_was_running
-        - ward_needs_ssh_bootstrap
+      when: ward_needs_ssh_bootstrap
 
     - name: Ensure SSH bootstrap packages are installed
       ansible.builtin.command:
@@ -212,24 +199,20 @@
     - name: Flush handlers before starting or restarting Ward
       ansible.builtin.meta: flush_handlers
 
+    - name: Stop Ward after host-side configuration changes
+      ansible.builtin.systemd_service:
+        name: "systemd-nspawn@{{ ward_hostname }}.service"
+        state: stopped
+      when: >-
+        ward_nspawn_definition.changed
+        or ward_resource_limits.changed
+        or ward_bind_mount_points.changed
+
     - name: Enable Ward at boot and ensure it is running
       ansible.builtin.systemd_service:
         name: "systemd-nspawn@{{ ward_hostname }}.service"
         enabled: true
         state: started
-
-    # A machine stopped for bootstrap picks up host-side changes when it starts.
-    - name: Restart a running Ward after host-side configuration changes
-      ansible.builtin.systemd_service:
-        name: "systemd-nspawn@{{ ward_hostname }}.service"
-        state: restarted
-      when:
-        - ward_was_running
-        - not ward_needs_ssh_bootstrap
-        - >-
-          ward_nspawn_definition.changed
-          or ward_resource_limits.changed
-          or ward_bind_mount_points.changed
 
     - name: Wait for Ward SSH access
       ansible.builtin.wait_for:

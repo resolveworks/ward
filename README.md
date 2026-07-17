@@ -14,7 +14,11 @@ directories persist through bind mounts:
 /home/johan/.pi       -> /home/agent/.pi
 ```
 
-All other container data can disappear when Ward is removed or rebuilt.
+All other container data can disappear when Ward is removed or rebuilt. The
+machine root contains no required durable state: the repository, host
+prerequisites, and the two bind-mount sources are sufficient to reconstruct it.
+Rebuild the disposable root instead of maintaining migrations for obsolete
+internal state.
 
 ## Prerequisites
 
@@ -42,11 +46,12 @@ its packages, system settings, and `agent` account over SSH through the virtual
 Ethernet connection.
 
 Packages from `packages.txt` are reconciled **presence-only**: every declared
-package is installed, but removing a line never uninstalls that package.
+package is installed, but removing a line does not uninstall that package from
+an existing root. Rebuilding resets Ward to the declared package set.
 
-Routine reconciliation does not stop Ward. An existing installation is stopped
-once if it needs SSH bootstrap files or packages. Later applies restart Ward
-only when `ward.nspawn` or `resources.conf` changes.
+Routine reconciliation does not stop Ward. Ward is stopped only if required SSH
+bootstrap files or packages must be repaired offline. Later applies restart
+Ward only when host-side configuration requiring a restart changes.
 
 ## Use
 
@@ -85,5 +90,7 @@ ansible-playbook uninstall.yml -K
 
 Before relying on Ward, confirm mapped-mount ownership, isolation from
 unrelated host files and sockets, outbound DNS and HTTPS, and the configured
-resource limits. `owneridmap` requires kernel and filesystem support for
+resource limits. `owneridmap` maps each agent-owned mount target to the host
+owner of its source, so the agent can use the bind mounts without exposing the
+full host UID range inside Ward. It requires kernel and filesystem support for
 id-mapped mounts.

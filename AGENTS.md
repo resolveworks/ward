@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Ward defines one long-lived Arch Linux `systemd-nspawn` machine for pi, child
+Ward defines one reproducible Arch Linux `systemd-nspawn` machine for pi, child
 agents, and their shared tmux server. Local Ansible playbooks manage it with
 privilege escalation. Only these host bind mounts persist:
 
@@ -11,7 +11,11 @@ privilege escalation. Only these host bind mounts persist:
 /home/johan/.pi       -> /home/agent/.pi
 ```
 
-The container root (`/var/lib/machines/ward`) is disposable.
+The container root (`/var/lib/machines/ward`) is disposable and must contain no
+required durable state. A clean uninstall followed by install must reconstruct
+Ward from the repository, host prerequisites, and the two bind-mount sources.
+Runtime state elsewhere in the root is expendable and must never become a
+provisioning input.
 
 ## Repository contents
 
@@ -29,14 +33,21 @@ other abstractions unless necessary.
 ## Rules
 
 - Preserve the unprivileged `agent` user (UID 1000), private user namespace,
-  id-mapped (`owneridmap`) bind mounts, virtual Ethernet, and the absence of
-  broad home or socket mounts.
+  owner-mapped (`owneridmap`) bind mounts, virtual Ethernet, and the absence of
+  broad home or socket mounts. Create bind-mount targets as the agent in the
+  machine root before starting Ward; do not identity-map the full container UID
+  range onto host UIDs.
 - Treat concrete paths, names, UID, timezone, and resource limits as
   deliberate. Keep `ward.nspawn`, `resources.conf`, `packages.txt`, and the
   playbook variables consistent with one another.
 - Keep one explicit Arch package per line in `packages.txt`. Project-specific
   dependencies belong to their projects, not Ward. Reconciliation is
-  PRESENCE-ONLY: removing a line does not uninstall that package.
+  PRESENCE-ONLY: removing a line does not uninstall that package from an
+  existing root; rebuilding resets the machine to the declared package set.
+- Treat the repository as the source of truth for all required machine
+  configuration. Do not add migrations, compatibility paths, or markers for
+  obsolete machine-root state. Reconcile the current declaration when possible;
+  otherwise uninstall and rebuild the disposable root.
 - Prefer fully-qualified `ansible.builtin.*` module names and idempotent
   modules over `shell`/`command`. Run host lifecycle tasks with
   `connection: local` and `become: true`, and reconcile the running Ward machine
@@ -45,9 +56,9 @@ other abstractions unless necessary.
   do not add a reinstall path. Bootstrap Python, OpenSSH, and the controller's
   `/home/johan/.ssh/id_ed25519.pub` key offline only when needed. Enable Ward at
   boot, then perform routine package and machine configuration over SSH without
-  stopping it. Restart Ward only when its nspawn definition or resource limits
-  changed. Reload `systemd`, via a handler flushed before start or restart, only
-  when copied unit/drop-in definitions changed.
+  stopping it. Restart Ward only when its nspawn definition, resource limits,
+  or pre-mount configuration changed. Reload `systemd`, via a handler flushed
+  before start or restart, only when copied unit/drop-in definitions changed.
 - Uninstall must remain separate, destructive, and unguarded (no prompt or
   assertion). It must disable and stop Ward, remove its root, nspawn definition,
   and dedicated service drop-in, reload `systemd`, and remain idempotent when

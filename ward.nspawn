@@ -5,6 +5,10 @@ PrivateUsers=pick
 
 [Files]
 PrivateUsersOwnership=auto
+# owneridmap maps the agent-owned targets to the host source owner without
+# exposing other host identities through the mounts. The playbook creates the
+# targets as UID/GID 1000 before Ward starts. Requires idmapped-mount support in
+# the kernel and source filesystems.
 Bind=/home/johan/Projects:/workspace:owneridmap
 Bind=/home/johan/.pi:/home/agent/.pi:owneridmap
 

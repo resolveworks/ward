@@ -32,8 +32,8 @@ in `README.md`.
 
 - User systemd and rootless Podman own the lifecycle.
 - The container identity is `agent` (1000:1000) under `keep-id`.
-- Only the documented mounts are exposed; `/opt`, shell configuration, and
-  tmux configuration are read-only.
+- Only the mounts declared in `ward.container` are exposed; `/opt`, shell
+  configuration, and tmux configuration are read-only.
 - Networking is shared with the host. PID, mount, IPC, UTS, and user namespaces
   remain private.
 - All capabilities are dropped and `no-new-privileges` remains enabled.

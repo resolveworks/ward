@@ -8,19 +8,9 @@ It runs as a rootless Podman container under the user systemd instance.
 Ward requires an x86_64 Arch Linux host with Podman, cgroup v2, user namespaces,
 at least 65536 subordinate UIDs/GIDs, and lingering enabled.
 
-The following paths must exist:
-
-```text
-$HOME/Projects   -> /workspace
-/opt             -> /opt (read-only)
-$HOME/.pi        -> /home/agent/.pi
-$HOME/.tmux.conf -> /home/agent/.tmux.conf (read-only)
-$HOME/.zshrc     -> /home/agent/.zshrc (read-only)
-$HOME/.oh-my-zsh -> /home/agent/.oh-my-zsh (read-only)
-```
-
-No other container state persists. The container runs as `agent` (1000:1000),
-drops all capabilities, and uses the limits in `ward.container`.
+Bind mounts and resource limits are defined in `ward.container`. All other
+container state is discarded on stop. The container runs as `agent`
+(1000:1000) and drops all capabilities.
 
 Networking is shared with the host. Host loopback, abstract Unix sockets, and
 host ports are therefore shared as well; Ward is not a network boundary.

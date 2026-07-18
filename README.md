@@ -9,11 +9,11 @@ run it with rootless Podman and user-level systemd.
 Only these host paths persist:
 
 ```text
-/home/johan/Projects   -> /workspace
-/home/johan/.pi        -> /home/agent/.pi
-/home/johan/.tmux.conf -> /home/agent/.tmux.conf (read-only)
-/home/johan/.zshrc     -> /home/agent/.zshrc (read-only)
-/home/johan/.oh-my-zsh -> /home/agent/.oh-my-zsh (read-only)
+$HOME/Projects   -> /workspace
+$HOME/.pi        -> /home/agent/.pi
+$HOME/.tmux.conf -> /home/agent/.tmux.conf (read-only)
+$HOME/.zshrc     -> /home/agent/.zshrc (read-only)
+$HOME/.oh-my-zsh -> /home/agent/.oh-my-zsh (read-only)
 ```
 
 Everything else disappears when Ward stops. The container runs rootless as
@@ -29,25 +29,22 @@ boundary.
 Ward assumes:
 
 - an x86_64 Arch Linux host with Podman, cgroup v2, and user namespaces;
-- `johan` is UID 1000, primary GID 1001, with home `/home/johan`;
-- this repository is `/home/johan/Projects/ward`;
+- this repository is `$HOME/Projects/ward`;
 - the five bind sources above exist;
-- `/etc/subuid` and `/etc/subgid` contain `johan:100000:65536`;
-- lingering is enabled for `johan`.
+- `/etc/subuid` and `/etc/subgid` allocate at least 65536 IDs;
+- lingering is enabled.
 
 One-time host setup, if needed:
 
 ```sh
 sudo pacman --needed -S podman
-sudo loginctl enable-linger johan
+sudo loginctl enable-linger "$USER"
 ```
 
 ## Deploy
 
-Run as `johan`:
-
 ```sh
-cd /home/johan/Projects/ward
+cd "$HOME/Projects/ward"
 install -d -m 0700 "$HOME/.config/containers/systemd"
 ln -sfnT "$PWD/ward.build" \
     "$HOME/.config/containers/systemd/ward.build"
@@ -83,8 +80,6 @@ podman exec --user agent --interactive --tty ward \
 Host and Ward share `.pi`; avoid using it from both at the same time.
 
 ## Remove
-
-Run as `johan`:
 
 ```sh
 systemctl --user stop ward.service ward-build.service

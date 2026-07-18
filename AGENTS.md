@@ -16,10 +16,10 @@ custom lifecycle tooling.
 
 ## Invariants
 
-- Ward runs through user-level systemd and rootless Podman as host user `johan`
-  (UID 1000, primary GID 1001).
+- Ward runs through user-level systemd and rootless Podman; host paths use
+  systemd's `%h` home-directory specifier.
 - The container runs as `agent` (UID/GID 1000:1000) with the explicit identity
-  and `keep-id` mapping in `ward.container`.
+  and `keep-id` mapping in `ward.container`, independent of the host UID/GID.
 - Persistence is limited to the five documented mounts. The three shell and
   tmux configuration mounts remain read-only.
 - Ward uses host networking while PID, mount, IPC, UTS, and user namespaces

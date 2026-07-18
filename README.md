@@ -29,7 +29,6 @@ boundary.
 Ward assumes:
 
 - an x86_64 Arch Linux host with Podman, cgroup v2, and user namespaces;
-- this repository is `$HOME/Projects/ward`;
 - the five bind sources above exist;
 - `/etc/subuid` and `/etc/subgid` allocate at least 65536 IDs;
 - lingering is enabled.
@@ -43,13 +42,11 @@ sudo loginctl enable-linger "$USER"
 
 ## Deploy
 
+From the repository root:
+
 ```sh
-cd "$HOME/Projects/ward"
 install -d -m 0700 "$HOME/.config/containers/systemd"
-ln -sfnT "$PWD/ward.build" \
-    "$HOME/.config/containers/systemd/ward.build"
-ln -sfnT "$PWD/ward.container" \
-    "$HOME/.config/containers/systemd/ward.container"
+ln -sfT "$PWD" "$HOME/.config/containers/systemd/ward"
 systemctl --user daemon-reload
 systemctl --user start ward.service
 ```
@@ -60,6 +57,7 @@ boots.
 ## Apply changes
 
 ```sh
+systemctl --user daemon-reload
 systemctl --user --job-mode=ignore-requirements \
     restart ward-build.service &&
 systemctl --user restart ward.service
@@ -83,11 +81,8 @@ Host and Ward share `.pi`; avoid using it from both at the same time.
 
 ```sh
 systemctl --user stop ward.service ward-build.service
-rm -f -- \
-    "$HOME/.config/containers/systemd/ward.build" \
-    "$HOME/.config/containers/systemd/ward.container"
+rm -f -- "$HOME/.config/containers/systemd/ward"
 systemctl --user daemon-reload
-podman container rm --force --ignore ward
 podman image rm --ignore localhost/ward:latest
 ```
 

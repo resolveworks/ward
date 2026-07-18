@@ -3,9 +3,7 @@ Description=Build the Ward Arch Linux OCI image
 
 [Build]
 ImageTag=localhost/ward:latest
-File=%h/Projects/ward/Containerfile
-SetWorkingDirectory=%h/Projects/ward
-IgnoreFile=%h/Projects/ward/.containerignore
+SetWorkingDirectory=unit
 Network=host
 # The base is immutable by digest; reuse it and cached build layers when present.
 Pull=missing

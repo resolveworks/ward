@@ -18,6 +18,8 @@ custom lifecycle tooling.
 
 - Ward runs through user-level systemd and rootless Podman; host paths use
   systemd's `%h` home-directory specifier.
+- The project directory is linked into Quadlet's search path, and `ward.build`
+  resolves its build context relative to that directory.
 - The container runs as `agent` (UID/GID 1000:1000) with the explicit identity
   and `keep-id` mapping in `ward.container`, independent of the host UID/GID.
 - Persistence is limited to the five documented mounts. The three shell and

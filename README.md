@@ -12,6 +12,7 @@ The following paths must exist:
 
 ```text
 $HOME/Projects   -> /workspace
+/opt             -> /opt (read-only)
 $HOME/.pi        -> /home/agent/.pi
 $HOME/.tmux.conf -> /home/agent/.tmux.conf (read-only)
 $HOME/.zshrc     -> /home/agent/.zshrc (read-only)

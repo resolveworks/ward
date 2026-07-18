@@ -21,7 +21,7 @@ RUN printf '%s\n' \
         nodejs \
         pnpm \
         python \
-    && sed -i 's/^#en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && printf '%s\n' 'en_US.UTF-8 UTF-8' > /etc/locale.gen \
     && locale-gen \
     && printf '%s\n' 'LANG=en_US.UTF-8' > /etc/locale.conf \
     && ln -sfn /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime \

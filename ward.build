@@ -1,0 +1,16 @@
+[Unit]
+Description=Build the Ward Arch Linux OCI image
+
+[Build]
+ImageTag=localhost/ward:latest
+File=/home/johan/Projects/ward/Containerfile
+SetWorkingDirectory=/home/johan/Projects/ward
+IgnoreFile=/home/johan/Projects/ward/.containerignore
+Network=host
+# The base is immutable by digest; reuse it and cached build layers when present.
+Pull=missing
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=30min

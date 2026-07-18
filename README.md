@@ -1,13 +1,27 @@
 # Ward
 
-Ward is one disposable Arch Linux `systemd-nspawn` machine that hosts pi, its
-child agents, and their shared tmux server. Ansible playbooks install and
-reconcile it on an Arch Linux host.
+Ward is one disposable Arch Linux OCI container for pi, child agents, and their
+shared tmux server. A `Containerfile` builds the image and rootless Podman runs
+it under `johan` through user-level systemd Quadlets. Ward is not a booted
+machine: it has no internal systemd, network manager, or SSH server.
 
 ## Model
 
-The container root `/var/lib/machines/ward` is disposable. Only these host
-paths persist through bind mounts:
+`ward.build` builds `localhost/ward:latest` from the repository. The
+`Containerfile` pins the official Arch base image by dated tag and immutable
+digest, then upgrades and installs packages from the Arch Linux Archive
+snapshot dated 2026-07-12. Updating packages is a deliberate change to both
+pins. These fixed inputs make clean reconstruction possible, but Ward does not
+claim byte-for-byte-identical image output.
+
+The container starts directly as `agent` (UID/GID 1000:1000). tmux runs in
+foreground server mode as the supervised process. `/etc/tmux.conf` creates a
+detached session named `ward`; the mounted user configuration is loaded after
+the system configuration. Foreground mode keeps the tmux server alive even if
+all sessions are closed, and the attach command recreates `ward` when needed.
+If the tmux server fails, the container exits and systemd may restart it.
+
+Only these host paths persist:
 
 ```text
 /home/johan/Projects   -> /workspace
@@ -17,95 +31,152 @@ paths persist through bind mounts:
 /home/johan/.oh-my-zsh -> /home/agent/.oh-my-zsh (read-only)
 ```
 
-All other container data can disappear when Ward is removed or rebuilt. The
-machine root contains no required durable state: the repository, host
-prerequisites, and the bind-mount sources are sufficient to reconstruct it.
-Rebuild the disposable root instead of maintaining migrations for obsolete
-internal state.
+Quadlet removes the container whenever its service stops. Changes elsewhere,
+including caches and files under unmounted parts of `/home/agent`, disappear on
+every stop or restart. Package changes belong in `Containerfile` and take
+effect only after an image rebuild. The five bind sources are never copied into
+the image.
+
+Ward shares the host network namespace. It can reach host-loopback TCP and UDP
+services and abstract Unix-domain sockets, and a service started in Ward
+consumes the corresponding host port. Ward is therefore not a network security
+boundary. PID, mount, IPC, UTS, and user namespaces remain private.
+
+No Docker or Podman API socket, SSH agent, D-Bus socket, display socket, device,
+or broad host directory is mounted. Docker is not required and its removal is
+outside Ward's lifecycle.
 
 ## Prerequisites
 
-The controller needs Ansible, the public key
-`/home/johan/.ssh/id_ed25519.pub`, regular `/home/johan/.tmux.conf` and
-`/home/johan/.zshrc` files, and a `/home/johan/.oh-my-zsh` directory on the
-Arch host:
+Ward is deliberately tied to this x86_64 Arch Linux host:
+
+- host user `johan` has UID 1000, primary GID 1001, and home `/home/johan`;
+- the five bind sources above already exist with the documented types;
+- `/home/johan/Projects/ward` is this repository;
+- unprivileged user namespaces and cgroup v2 are available;
+- `johan:100000:65536` is available in both `/etc/subuid` and `/etc/subgid`.
+
+`install.sh` installs the Arch `podman` package if needed, adds the fixed
+subordinate-ID declarations when they are absent and nonconflicting, and
+enables lingering for `johan`. Lingering lets the user manager start Ward at
+boot without an interactive login.
+
+Before the first OCI install, remove any legacy nspawn Ward with its old
+uninstaller. If that source is no longer available, remove the legacy service,
+root, definition, and dedicated drop-in explicitly:
 
 ```sh
-sudo pacman -S --needed ansible
+sudo systemctl disable --now systemd-nspawn@ward.service
+sudo rm -rf --one-file-system /var/lib/machines/ward
+sudo rm -f /etc/systemd/nspawn/ward.nspawn
+sudo rm -rf --one-file-system \
+    /etc/systemd/system/systemd-nspawn@ward.service.d
+sudo systemctl daemon-reload
 ```
 
-The host must run systemd-networkd and systemd-resolved. networkd configures
-Ward's virtual Ethernet link with DHCP and NAT through the stock
-`80-container-ve.network` file, and Ward copies its DNS servers from
-resolved's uplink list (`ResolvConf=copy-uplink` in `ward.nspawn`) because
-the host's `127.0.0.53` stub resolver is unreachable from inside Ward.
-
-The inventory selects the matching `/home/johan/.ssh/id_ed25519` private key;
-its contents remain outside this repository. Run the playbooks from the
-repository root. Pass `-K`
-(`--ask-become-pass`) when sudo needs a password.
+The new installer refuses to proceed while those fixed legacy paths remain.
 
 ## Install and apply
 
+Run the lifecycle command as root; it never invokes `sudo` itself:
+
 ```sh
-ansible-playbook install.yml -K
+sudo ./install.sh
 ```
 
-`install.yml` creates Ward when absent, authorizes the controller public key for
-`root`, and enables Ward at host boot. Once Ward is running, Ansible reconciles
-its packages, system settings, and `agent` account over SSH through the virtual
-Ethernet connection.
-
-Packages from `packages.txt` are reconciled **presence-only**: every declared
-package is installed, but removing a line does not uninstall that package from
-an existing root. Rebuilding resets Ward to the declared package set.
-
-Routine reconciliation does not stop Ward. Ward is stopped only if required SSH
-bootstrap files or packages must be repaired offline. Later applies restart
-Ward only when host-side configuration requiring a restart changes.
+The script links `ward.build` and `ward.container` into
+`/etc/containers/systemd/users/1000`, reloads `johan`'s user manager, and builds
+the image. It restarts `ward.service` only after `ward-build.service` succeeds.
+Because systemd normally propagates a required unit's restart, the script
+suppresses requirement propagation for that explicit build job; ordering is
+still honored. A failed build therefore leaves an already-running Ward
+container intact. Re-running the script is the apply operation; Podman reuses
+unchanged build layers. Nothing is reconciled inside a running container.
 
 ## Use
 
-Ward starts automatically. The `agent` user's login shell is zsh. Its host
-`.zshrc` and complete Oh My Zsh tree are mounted read-only, so host shell
-configuration changes are immediately visible without allowing Ward to modify
-them. Commands and absolute paths referenced by `.zshrc` still need to exist in
-Ward to work there.
+Run these commands as regular user `johan`.
 
-Attach to its shared tmux session as the `agent` user:
+Attach to the shared session:
 
 ```sh
-machinectl shell agent@ward /usr/bin/tmux new-session -A -s ward
+podman exec --user agent --interactive --tty ward \
+    tmux new-session -A -s ward
 ```
 
-Host and container pi share the mounted `.pi`, so do not use the same session or
-extension runtime files concurrently in both.
+Open a separate zsh instead:
+
+```sh
+podman exec --user agent --interactive --tty ward /bin/zsh
+```
+
+Host and Ward share `.pi` runtime state. Do not run host and Ward pi sessions or
+extension runtimes against it concurrently.
 
 ## Administration
 
+Run user-service and Podman commands as `johan`:
+
 ```sh
-ssh root@ward
-machinectl shell root@ward
-machinectl status ward
-journalctl -u systemd-nspawn@ward.service
-sudo systemctl stop systemd-nspawn@ward.service
+systemctl --user status ward.service
+systemctl --user status ward-build.service
+systemctl --user restart ward.service
+journalctl --user -u ward.service
+journalctl --user -u ward-build.service
+podman inspect ward
+podman image inspect localhost/ward:latest
 ```
+
+A service restart discards the old writable layer. Applying source changes is
+instead done with the root lifecycle command so the image is built before Ward
+is replaced.
+
+The container drops all Linux capabilities and sets `no-new-privileges`.
+Privileged tests, nested containers, FUSE, ptrace, device access, and workflows
+that need setuid or file capabilities are not guaranteed. Any relaxation needs
+specific review; do not use privileged mode as a workaround.
+
+## Resource limits
+
+`ward.container` applies the limits to the complete systemd service process
+tree and also sets Podman's container PID limit:
+
+```text
+MemoryHigh=12G
+MemoryMax=16G
+TasksMax=4096
+PidsLimit=4096
+```
+
+systemd owns startup, bounded restart behavior, shutdown, and logging. Podman's
+internal restart policy is not used.
 
 ## Uninstall
 
-`uninstall.yml` is **destructive and unguarded**. It disables and stops Ward,
-removes its root and host definitions, and reloads systemd. It preserves host
-packages and the bind-mount sources, and is safe to re-run when Ward is absent.
+`uninstall.sh` is destructive and unguarded. Run it as root:
 
 ```sh
-ansible-playbook uninstall.yml -K
+sudo ./uninstall.sh
 ```
 
-## Verify
+It stops Ward through `johan`'s user manager, removes only Ward's two Quadlet
+links, exact container, and `localhost/ward:latest` image, then reloads the user
+manager. It preserves all bind sources, unrelated Podman containers, images,
+volumes and build cache, the Podman package, subordinate IDs, and lingering.
+It is safe to run again when Ward is absent.
 
-Before relying on Ward, confirm mapped-mount ownership, isolation from
-unrelated host files and sockets, outbound DNS and HTTPS, and the configured
-resource limits. `owneridmap` maps each agent-owned mount target to the host
-owner of its source, so the agent can use the bind mounts without exposing the
-full host UID range inside Ward. It requires kernel and filesystem support for
-id-mapped mounts.
+## Verification
+
+After installation, verify the runtime before relying on it:
+
+- Ward is rootless and processes run as UID/GID 1000:1000 inside it;
+- writes in `/workspace` and `.pi` have host ownership `johan:johan`;
+- the three configuration mounts reject writes;
+- no unlisted host files or filesystem sockets are visible;
+- host loopback, DNS, HTTPS, and host-port consumption behave as documented;
+- tmux can be attached repeatedly and remains the primary workload;
+- the memory and effective 4096 task/PID limits apply;
+- unmounted data disappears, while the two writable bind mounts persist, after
+  a restart;
+- a failed build does not interrupt the currently running container;
+- uninstall leaves bind sources and unrelated rootless Podman state untouched.

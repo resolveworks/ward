@@ -41,6 +41,7 @@ RUN printf '%s\n' \
         /home/agent/.oh-my-zsh \
     && install -o agent -g agent -m 0644 /dev/null \
         /home/agent/.tmux.conf \
+    && install -o agent -g agent -m 0644 /dev/null \
         /home/agent/.zshrc \
     && printf '%s\n' 'new-session -d -s ward' > /etc/tmux.conf \
     && rm -rf /var/cache/pacman/pkg/*

@@ -1,13 +1,11 @@
-# The dated official base and the package snapshot are updated together.
+# Keep the base tag, digest, and ALA date aligned.
 FROM docker.io/library/archlinux:base-20260712.0.555161@sha256:9edcc183d2505745a1da7a18bf12833dde174734610c72a5978031191504af1f
 
 LABEL org.opencontainers.image.title="Ward" \
       org.opencontainers.image.description="Rootless pi and tmux development environment" \
       org.opencontainers.image.source="https://github.com/resolveworks/ward"
 
-# The base image already contains base, but --needed keeps it an explicit part
-# of Ward's declaration. Upgrade and install against one immutable ALA snapshot
-# in a single transaction, then remove downloaded package archives.
+# Install the complete package set in one transaction against the ALA snapshot.
 RUN printf '%s\n' \
         'Server = https://archive.archlinux.org/repos/2026/07/12/$repo/os/$arch' \
         > /etc/pacman.d/mirrorlist \
@@ -55,6 +53,5 @@ ENV HOME=/home/agent \
 WORKDIR /workspace
 USER 1000:1000
 
-# -D keeps the tmux server in the foreground and accepts no command. The system
-# tmux configuration above creates the initial detached session named ward.
+# /etc/tmux.conf creates the session; -D keeps the server in the foreground.
 CMD ["/usr/bin/tmux", "-D"]

@@ -1,7 +1,21 @@
 # AGENTS.md
 
-Ward defines one disposable Arch Linux image and one rootless Podman container
-for pi and its shared tmux server.
+Ward is one opinionated Arch Linux image and one rootless Podman container for
+pi and its tmux server. It is an exact environment, not a portable framework.
+
+## Approach
+
+Assume an experienced Arch Linux operator. Keep documentation terse and
+command-oriented; document Ward's contract, not generic Arch, Podman, systemd,
+or tmux usage.
+
+Prefer explicit assumptions and immediate failures. Do not add compatibility
+layers, prerequisite probes, fallback behavior, silent recovery, or friendly
+wrappers around the underlying tools. A missing requirement or inconsistent
+state should fail at the command that encounters it with its native diagnostic.
+
+Do not describe Ward as a personal project. Keep the repository suitable for
+outside contributions without broadening its scope or supported environments.
 
 ## Authorities
 
@@ -9,46 +23,37 @@ for pi and its shared tmux server.
 - `.containerignore`: build context
 - `ward.build`: image build
 - `ward.container`: runtime, mounts, isolation, and limits
-- `README.md`: host requirements and operation
+- `README.md`: contract and commands
 
-Use the standard host, systemd, and Podman commands in `README.md`; Ward has no
-custom lifecycle tooling.
+Ward has no custom lifecycle tooling; use the host, systemd, and Podman commands
+in `README.md`.
 
 ## Invariants
 
-- Ward runs through user-level systemd and rootless Podman; host paths use
-  systemd's `%h` home-directory specifier.
-- The project directory is linked into Quadlet's search path, and `ward.build`
-  resolves its build context relative to that directory.
-- The container runs as `agent` (UID/GID 1000:1000) with the explicit identity
-  and `keep-id` mapping in `ward.container`, independent of the host UID/GID.
-- Persistence is limited to the five documented mounts. The three shell and
-  tmux configuration mounts remain read-only.
-- Ward uses host networking while PID, mount, IPC, UTS, and user namespaces
+- User systemd and rootless Podman own the lifecycle.
+- The container identity is `agent` (1000:1000) under `keep-id`.
+- Only the five documented mounts persist; shell and tmux configuration is
+  read-only.
+- Networking is shared with the host. PID, mount, IPC, UTS, and user namespaces
   remain private.
-- The container drops all capabilities, uses `no-new-privileges`, and keeps the
-  limits in `ward.container`.
-- The writable container root is discarded on every stop.
-- tmux remains the foreground process and creates the initial session `ward`.
-- Quadlet and systemd own builds, startup, restarts, shutdown, and logging.
-- Apply builds before restart and uses `--job-mode=ignore-requirements`, so a
-  failed build leaves the running container intact.
+- All capabilities are dropped and `no-new-privileges` remains enabled.
+- The writable root is discarded on stop.
+- tmux is the foreground process and creates session `ward`.
+- Apply builds first; a failed build leaves the running container untouched.
 
 ## Changes
 
-Keep image packages in the single `pacman -Syu` transaction in
-`Containerfile`. Update the dated Arch base tag and digest together with the
-Arch Linux Archive snapshot.
+Keep packages in the single `pacman -Syu` transaction. Update the Arch base tag,
+digest, and Archive snapshot together.
 
-Keep runtime configuration in `ward.container`, and update `README.md` when
-requirements or user-facing behavior change. Preserve unrelated working-tree
-changes and keep secrets, host state, container storage, and `.pi` contents out
-of the repository.
+Keep runtime policy in `ward.container`. Update `README.md` only for changes to
+the contract or commands. Never commit secrets, host state, container storage,
+or `.pi` contents. Preserve unrelated working-tree changes.
 
-## Safety and validation
+## Validation
 
-Host changes, builds, containers, and systemd operations require explicit user
-permission. Safe static checks are:
+Do not modify the host or run builds, containers, or systemd without explicit
+permission. Static checks are:
 
 ```sh
 git diff --check
@@ -58,5 +63,4 @@ QUADLET_UNIT_DIRS="$PWD" \
 git diff
 ```
 
-Use the generator only when installed. State which host and runtime checks were
-not performed.
+Run the generator only when installed. Report omitted host and runtime checks.

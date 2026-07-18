@@ -1,12 +1,14 @@
 # Ward
 
 Ward is a disposable Arch Linux environment for pi and its shared tmux server.
-`Containerfile` defines the image; `ward.build` and `ward.container` build and
-run it with rootless Podman and user-level systemd.
+It runs as a rootless Podman container under the user systemd instance.
 
-## Runtime
+## Contract
 
-Only these host paths persist:
+Ward requires an x86_64 Arch Linux host with Podman, cgroup v2, user namespaces,
+at least 65536 subordinate UIDs/GIDs, and lingering enabled.
+
+The following paths must exist:
 
 ```text
 $HOME/Projects   -> /workspace
@@ -16,24 +18,13 @@ $HOME/.zshrc     -> /home/agent/.zshrc (read-only)
 $HOME/.oh-my-zsh -> /home/agent/.oh-my-zsh (read-only)
 ```
 
-Everything else disappears when Ward stops. The container runs rootless as
-`agent` (UID/GID 1000:1000) with private process and filesystem namespaces,
-dropped capabilities, and the limits in `ward.container`.
+No other container state persists. The container runs as `agent` (1000:1000),
+drops all capabilities, and uses the limits in `ward.container`.
 
-Ward uses host networking. It can reach host loopback and abstract Unix
-sockets, and its services consume host ports. It is not a network security
-boundary.
+Networking is shared with the host. Host loopback, abstract Unix sockets, and
+host ports are therefore shared as well; Ward is not a network boundary.
 
-## Requirements
-
-Ward assumes:
-
-- an x86_64 Arch Linux host with Podman, cgroup v2, and user namespaces;
-- the five bind sources above exist;
-- `/etc/subuid` and `/etc/subgid` allocate at least 65536 IDs;
-- lingering is enabled.
-
-One-time host setup, if needed:
+## Host setup
 
 ```sh
 sudo pacman --needed -S podman
@@ -46,15 +37,12 @@ From the repository root:
 
 ```sh
 install -d -m 0700 "$HOME/.config/containers/systemd"
-ln -sfT "$PWD" "$HOME/.config/containers/systemd/ward"
+ln -sT "$PWD" "$HOME/.config/containers/systemd/ward"
 systemctl --user daemon-reload
 systemctl --user start ward.service
 ```
 
-Quadlet builds the image before starting Ward and starts it on subsequent
-boots.
-
-## Apply changes
+## Apply
 
 ```sh
 systemctl --user daemon-reload
@@ -63,28 +51,22 @@ systemctl --user --job-mode=ignore-requirements \
 systemctl --user restart ward.service
 ```
 
-A failed build leaves the current container running. A successful build is
-picked up by the following restart.
+The container is restarted only after a successful build.
 
-## Use
-
-Attach to Ward's tmux session:
+## Attach
 
 ```sh
 podman exec --user agent --interactive --tty ward \
     tmux new-session -A -s ward
 ```
 
-Host and Ward share `.pi`; avoid using it from both at the same time.
+The host and Ward share `.pi`; do not use it concurrently.
 
 ## Remove
 
 ```sh
 systemctl --user stop ward.service ward-build.service
-rm -f -- "$HOME/.config/containers/systemd/ward"
+rm -- "$HOME/.config/containers/systemd/ward"
 systemctl --user daemon-reload
-podman image rm --ignore localhost/ward:latest
+podman image rm localhost/ward:latest
 ```
-
-This preserves the bind sources, host prerequisites, and unrelated Podman
-state.

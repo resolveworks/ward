@@ -5,7 +5,6 @@ Description=Build the Ward Arch Linux OCI image
 ImageTag=localhost/ward:latest
 SetWorkingDirectory=unit
 Network=host
-# The base is immutable by digest; reuse it and cached build layers when present.
 Pull=missing
 
 [Service]

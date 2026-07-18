@@ -13,6 +13,8 @@ paths persist through bind mounts:
 /home/johan/Projects   -> /workspace
 /home/johan/.pi        -> /home/agent/.pi
 /home/johan/.tmux.conf -> /home/agent/.tmux.conf (read-only)
+/home/johan/.zshrc     -> /home/agent/.zshrc (read-only)
+/home/johan/.oh-my-zsh -> /home/agent/.oh-my-zsh (read-only)
 ```
 
 All other container data can disappear when Ward is removed or rebuilt. The
@@ -24,12 +26,19 @@ internal state.
 ## Prerequisites
 
 The controller needs Ansible, the public key
-`/home/johan/.ssh/id_ed25519.pub`, and a regular `/home/johan/.tmux.conf` file
-on the Arch host:
+`/home/johan/.ssh/id_ed25519.pub`, regular `/home/johan/.tmux.conf` and
+`/home/johan/.zshrc` files, and a `/home/johan/.oh-my-zsh` directory on the
+Arch host:
 
 ```sh
 sudo pacman -S --needed ansible
 ```
+
+The host must run systemd-networkd and systemd-resolved. networkd configures
+Ward's virtual Ethernet link with DHCP and NAT through the stock
+`80-container-ve.network` file, and Ward copies its DNS servers from
+resolved's uplink list (`ResolvConf=copy-uplink` in `ward.nspawn`) because
+the host's `127.0.0.53` stub resolver is unreachable from inside Ward.
 
 The inventory selects the matching `/home/johan/.ssh/id_ed25519` private key;
 its contents remain outside this repository. Run the playbooks from the
@@ -57,8 +66,13 @@ Ward only when host-side configuration requiring a restart changes.
 
 ## Use
 
-Ward starts automatically. Attach to its shared tmux session as the `agent`
-user:
+Ward starts automatically. The `agent` user's login shell is zsh. Its host
+`.zshrc` and complete Oh My Zsh tree are mounted read-only, so host shell
+configuration changes are immediately visible without allowing Ward to modify
+them. Commands and absolute paths referenced by `.zshrc` still need to exist in
+Ward to work there.
+
+Attach to its shared tmux session as the `agent` user:
 
 ```sh
 machinectl shell agent@ward /usr/bin/tmux new-session -A -s ward

@@ -18,6 +18,8 @@
     ward_agent_uid: 1000
     ward_ssh_public_key_file: /home/johan/.ssh/id_ed25519.pub
     ward_tmux_config_file: /home/johan/.tmux.conf
+    ward_zsh_config_file: /home/johan/.zshrc
+    ward_oh_my_zsh_directory: /home/johan/.oh-my-zsh
 
     # Uninstall does not remove host dependencies.
     host_packages:
@@ -66,6 +68,26 @@
         that: ward_tmux_config.stat.isreg | default(false)
         fail_msg: "{{ ward_tmux_config_file }} must be a regular file"
 
+    - name: Check for the host zsh configuration
+      ansible.builtin.stat:
+        path: "{{ ward_zsh_config_file }}"
+      register: ward_zsh_config
+
+    - name: Require the host zsh configuration
+      ansible.builtin.assert:
+        that: ward_zsh_config.stat.isreg | default(false)
+        fail_msg: "{{ ward_zsh_config_file }} must be a regular file"
+
+    - name: Check for the host Oh My Zsh directory
+      ansible.builtin.stat:
+        path: "{{ ward_oh_my_zsh_directory }}"
+      register: ward_oh_my_zsh
+
+    - name: Require the host Oh My Zsh directory
+      ansible.builtin.assert:
+        that: ward_oh_my_zsh.stat.isdir | default(false)
+        fail_msg: "{{ ward_oh_my_zsh_directory }} must be a directory"
+
     # owneridmap derives its mapping from each target owner before mounting.
     - name: Ensure agent-owned bind mount points exist in the machine root
       ansible.builtin.file:
@@ -77,18 +99,22 @@
       loop:
         - "{{ ward_root }}/workspace"
         - "{{ ward_root }}/home/{{ ward_agent_name }}/.pi"
+        - "{{ ward_root }}/home/{{ ward_agent_name }}/.oh-my-zsh"
       register: ward_bind_mount_points
 
-    - name: Ensure the agent tmux config bind target exists
+    - name: Ensure agent config bind targets exist
       ansible.builtin.file:
-        path: "{{ ward_root }}/home/{{ ward_agent_name }}/.tmux.conf"
+        path: "{{ item }}"
         state: touch
         owner: "{{ ward_agent_uid }}"
         group: "{{ ward_agent_uid }}"
         mode: "0644"
         access_time: preserve
         modification_time: preserve
-      register: ward_tmux_config_bind_target
+      loop:
+        - "{{ ward_root }}/home/{{ ward_agent_name }}/.tmux.conf"
+        - "{{ ward_root }}/home/{{ ward_agent_name }}/.zshrc"
+      register: ward_config_bind_targets
 
     - name: Inspect Ward SSH bootstrap files
       ansible.builtin.stat:
@@ -229,7 +255,7 @@
         ward_nspawn_definition.changed
         or ward_resource_limits.changed
         or ward_bind_mount_points.changed
-        or ward_tmux_config_bind_target.changed
+        or ward_config_bind_targets.changed
 
     - name: Enable Ward at boot and ensure it is running
       ansible.builtin.systemd_service:
@@ -314,7 +340,7 @@
         uid: "{{ ward_agent_uid }}"
         group: "{{ ward_agent_name }}"
         home: "/home/{{ ward_agent_name }}"
-        shell: /bin/bash
+        shell: /bin/zsh
         create_home: true
         state: present
 

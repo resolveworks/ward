@@ -2,6 +2,7 @@ base
 base-devel
 git
 tmux
+zsh
 ripgrep
 jq
 curl

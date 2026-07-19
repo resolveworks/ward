@@ -55,6 +55,7 @@ RUN printf '%s\n' \
         "$WARD_HOME/.oh-my-zsh" \
     && install -d -o "$WARD_USER" -g "$WARD_USER" -m 0700 \
         "$WARD_HOME/.ssh" \
+        /run/user/1000 \
     && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \
         "$WARD_HOME/.gitconfig" \
     && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \

@@ -20,7 +20,7 @@ Volume=/opt:/opt:ro
 Volume=%h/.gitconfig:%h/.gitconfig:ro
 Volume=%h/.ssh/allowed_signers:%h/.ssh/allowed_signers:ro
 Volume=%h/.ssh/known_hosts:%h/.ssh/known_hosts:ro
-Volume=%t/ssh-agent.socket:/run/ssh-agent.socket
+Volume=%t/ssh-agent.socket:/run/user/1000/ssh-agent.socket
 Volume=%h/.pi:%h/.pi
 Volume=%h/.local/share/pnpm:%h/.local/share/pnpm
 Volume=%h/.cache/uv:%h/.cache/uv
@@ -31,7 +31,8 @@ Volume=%t/ward:/run/ward
 PidsLimit=4096
 NoNewPrivileges=true
 DropCapability=all
-Environment=SSH_AUTH_SOCK=/run/ssh-agent.socket
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=SSH_AUTH_SOCK=/run/user/1000/ssh-agent.socket
 Environment=UV_LINK_MODE=copy
 LogDriver=journald
 StopTimeout=30

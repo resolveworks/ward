@@ -24,6 +24,7 @@ RUN printf '%s\n' \
         nodejs \
         pnpm \
         python \
+        uv \
     && printf '%s\n' 'en_US.UTF-8 UTF-8' > /etc/locale.gen \
     && locale-gen \
     && printf '%s\n' 'LANG=en_US.UTF-8' > /etc/locale.conf \

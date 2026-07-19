@@ -17,6 +17,7 @@ Volume=%h/Projects:%h/Projects
 Volume=/opt:/opt:ro
 Volume=%h/.pi:%h/.pi
 Volume=%h/.local/share/pnpm:%h/.local/share/pnpm
+Volume=%h/.cache/uv:%h/.cache/uv
 Volume=%h/.tmux.conf:%h/.tmux.conf:ro
 Volume=%h/.zshrc:%h/.zshrc:ro
 Volume=%h/.oh-my-zsh:%h/.oh-my-zsh:ro
@@ -24,6 +25,7 @@ Volume=%t/ward:/run/ward
 PidsLimit=4096
 NoNewPrivileges=true
 DropCapability=all
+Environment=UV_LINK_MODE=copy
 LogDriver=journald
 StopTimeout=30
 

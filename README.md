@@ -25,6 +25,7 @@ host ports are therefore shared as well; Ward is not a network boundary.
 ```sh
 sudo pacman --needed -S podman tmux
 sudo loginctl enable-linger "$USER"
+install -d -m 0755 "$HOME/.cache/uv"
 ```
 
 ## Deploy

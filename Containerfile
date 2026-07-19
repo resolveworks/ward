@@ -41,6 +41,7 @@ RUN printf '%s\n' \
     && install -d -o "$WARD_USER" -g "$WARD_USER" -m 0755 \
         "$WARD_HOME" \
         "$WARD_HOME/Projects" \
+        "$WARD_HOME/.cache" \
         "$WARD_HOME/.pi" \
         "$WARD_HOME/.oh-my-zsh" \
     && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \

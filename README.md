@@ -53,7 +53,7 @@ The container is restarted only after a successful build.
 ## Start a session
 
 ```sh
-tmux -S "$XDG_RUNTIME_DIR/ward/tmux.sock" new-session
+tmux -S "$XDG_RUNTIME_DIR/ward/tmux.sock"
 ```
 
 ## Remove

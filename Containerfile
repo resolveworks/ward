@@ -55,4 +55,4 @@ WORKDIR /home/agent/Projects
 USER 1000:1000
 
 # /etc/tmux.conf creates the session; -D keeps the server in the foreground.
-CMD ["/usr/bin/tmux", "-D"]
+CMD ["/usr/bin/tmux", "-S", "/run/ward/tmux.sock", "-D"]

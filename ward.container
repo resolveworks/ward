@@ -20,6 +20,7 @@ Volume=%h/.local/share/pnpm:%h/.local/share/pnpm
 Volume=%h/.tmux.conf:/home/agent/.tmux.conf:ro
 Volume=%h/.zshrc:/home/agent/.zshrc:ro
 Volume=%h/.oh-my-zsh:/home/agent/.oh-my-zsh:ro
+Volume=%t/ward:/run/ward
 PidsLimit=4096
 NoNewPrivileges=true
 DropCapability=all
@@ -27,6 +28,8 @@ LogDriver=journald
 StopTimeout=30
 
 [Service]
+RuntimeDirectory=ward
+RuntimeDirectoryMode=0700
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=45s

@@ -23,7 +23,6 @@ outside contributions without broadening its scope or supported environments.
 - `.containerignore`: build context
 - `ward.build`: image build
 - `ward.container`: runtime, mounts, isolation, and limits
-- `ward.exec.env`: host environment forwarded when attaching
 - `README.md`: contract and commands
 
 Ward has no custom lifecycle tooling; use the host, systemd, and Podman commands

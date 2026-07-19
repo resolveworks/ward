@@ -1,6 +1,9 @@
 # Keep the base tag, digest, and ALA date aligned.
 FROM docker.io/library/archlinux:base-20260712.0.555161@sha256:9edcc183d2505745a1da7a18bf12833dde174734610c72a5978031191504af1f
 
+ARG WARD_USER
+ARG WARD_HOME
+
 LABEL org.opencontainers.image.title="Ward" \
       org.opencontainers.image.description="Rootless pi and tmux development environment" \
       org.opencontainers.image.source="https://github.com/resolveworks/ward"
@@ -25,34 +28,33 @@ RUN printf '%s\n' \
     && locale-gen \
     && printf '%s\n' 'LANG=en_US.UTF-8' > /etc/locale.conf \
     && ln -sfn /usr/share/zoneinfo/Europe/Amsterdam /etc/localtime \
-    && groupadd --gid 1000 agent \
+    && groupadd --gid 1000 "$WARD_USER" \
     && useradd \
         --uid 1000 \
         --gid 1000 \
-        --home-dir /home/agent \
+        --home-dir "$WARD_HOME" \
         --create-home \
         --shell /bin/zsh \
-        agent \
-    && passwd --lock agent \
-    && install -d -o agent -g agent -m 0755 \
-        /home/agent \
-        /home/agent/Projects \
-        /home/agent/.pi \
-        /home/agent/.oh-my-zsh \
-    && install -o agent -g agent -m 0644 /dev/null \
-        /home/agent/.tmux.conf \
-    && install -o agent -g agent -m 0644 /dev/null \
-        /home/agent/.zshrc \
-    && printf '%s\n' 'new-session -d -s ward' > /etc/tmux.conf \
+        "$WARD_USER" \
+    && passwd --lock "$WARD_USER" \
+    && install -d -o "$WARD_USER" -g "$WARD_USER" -m 0755 \
+        "$WARD_HOME" \
+        "$WARD_HOME/Projects" \
+        "$WARD_HOME/.pi" \
+        "$WARD_HOME/.oh-my-zsh" \
+    && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \
+        "$WARD_HOME/.tmux.conf" \
+    && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \
+        "$WARD_HOME/.zshrc" \
     && rm -rf /var/cache/pacman/pkg/*
 
-ENV HOME=/home/agent \
-    USER=agent \
+ENV HOME=${WARD_HOME} \
+    USER=${WARD_USER} \
     SHELL=/bin/zsh \
     LANG=en_US.UTF-8
 
-WORKDIR /home/agent/Projects
+WORKDIR ${WARD_HOME}/Projects
 USER 1000:1000
 
-# /etc/tmux.conf creates the session; -D keeps the server in the foreground.
+# Start an empty server in the foreground; host clients create sessions.
 CMD ["/usr/bin/tmux", "-S", "/run/ward/tmux.sock", "-D"]

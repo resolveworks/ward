@@ -10,11 +10,12 @@ image's tmux server, cgroup v2, user namespaces, at least 65536 subordinate
 UIDs/GIDs, and lingering enabled.
 
 Host bind mounts provide projects, configuration, and persistent development
-state. Projects are available at `/home/agent/Projects`. Mounts and resource
-limits are defined in `ward.container`. The tmux server socket is exposed at
-`$XDG_RUNTIME_DIR/ward/tmux.sock`; the tmux client runs on the host. All other
-container state is discarded on stop. The container runs as `agent` (1000:1000)
-and drops all capabilities.
+state. Home-directory mounts use the same paths on the host and in the
+container. Mounts and resource limits are defined in `ward.container`. The tmux
+server socket is exposed at `$XDG_RUNTIME_DIR/ward/tmux.sock`; the tmux client
+runs on the host. All other container state is discarded on stop. The container
+account uses the host user name and home path, runs as 1000:1000 under
+`keep-id`, and drops all capabilities.
 
 Networking is shared with the host. Host loopback, abstract Unix sockets, and
 host ports are therefore shared as well; Ward is not a network boundary.
@@ -48,12 +49,10 @@ systemctl --user restart ward.service
 
 The container is restarted only after a successful build.
 
-## Attach
+## Start a session
 
 ```sh
-env -u TMUX tmux \
-    -S "$XDG_RUNTIME_DIR/ward/tmux.sock" \
-    attach-session -t ward
+tmux -S "$XDG_RUNTIME_DIR/ward/tmux.sock" new-session
 ```
 
 ## Remove

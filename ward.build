@@ -2,6 +2,8 @@
 Description=Build the Ward Arch Linux OCI image
 
 [Build]
+BuildArg=WARD_USER=%u
+BuildArg=WARD_HOME=%h
 ImageTag=localhost/ward:latest
 SetWorkingDirectory=unit
 Network=host

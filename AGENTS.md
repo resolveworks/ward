@@ -31,14 +31,15 @@ in `README.md`.
 ## Invariants
 
 - User systemd and rootless Podman own the lifecycle.
-- The container identity is `agent` (1000:1000) under `keep-id`.
+- The container account uses the host user name and home path, with identity
+  1000:1000 under `keep-id`.
 - Only the mounts declared in `ward.container` are exposed; `/opt`, shell
   configuration, and tmux configuration are read-only.
 - Networking is shared with the host. PID, mount, IPC, UTS, and user namespaces
   remain private.
 - All capabilities are dropped and `no-new-privileges` remains enabled.
 - The writable root is discarded on stop.
-- tmux is the foreground process and creates session `ward`.
+- tmux is the foreground process; host clients create sessions.
 - Apply builds first; a failed build leaves the running container untouched.
 
 ## Changes

@@ -35,8 +35,8 @@ RUN printf '%s\n' \
         agent \
     && passwd --lock agent \
     && install -d -o agent -g agent -m 0755 \
-        /workspace \
         /home/agent \
+        /home/agent/Projects \
         /home/agent/.pi \
         /home/agent/.oh-my-zsh \
     && install -o agent -g agent -m 0644 /dev/null \
@@ -51,7 +51,7 @@ ENV HOME=/home/agent \
     SHELL=/bin/zsh \
     LANG=en_US.UTF-8
 
-WORKDIR /workspace
+WORKDIR /home/agent/Projects
 USER 1000:1000
 
 # /etc/tmux.conf creates the session; -D keeps the server in the foreground.

@@ -9,9 +9,9 @@ Ward requires an x86_64 Arch Linux host with Podman, cgroup v2, user namespaces,
 at least 65536 subordinate UIDs/GIDs, and lingering enabled.
 
 Host bind mounts provide projects, configuration, and persistent development
-state. Mounts and resource limits are defined in `ward.container`. All other
-container state is discarded on stop. The container runs as `agent` (1000:1000)
-and drops all capabilities.
+state. Projects are available at `/home/agent/Projects`. Mounts and resource
+limits are defined in `ward.container`. All other container state is discarded
+on stop. The container runs as `agent` (1000:1000) and drops all capabilities.
 
 Networking is shared with the host. Host loopback, abstract Unix sockets, and
 host ports are therefore shared as well; Ward is not a network boundary.

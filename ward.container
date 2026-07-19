@@ -12,8 +12,8 @@ Network=host
 UserNS=keep-id:uid=1000,gid=1000
 User=1000
 Group=1000
-WorkingDir=/workspace
-Volume=%h/Projects:/workspace
+WorkingDir=/home/agent/Projects
+Volume=%h/Projects:/home/agent/Projects
 Volume=/opt:/opt:ro
 Volume=%h/.pi:/home/agent/.pi
 Volume=%h/.local/share/pnpm:%h/.local/share/pnpm

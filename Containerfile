@@ -16,6 +16,7 @@ RUN printf '%s\n' \
         base \
         base-devel \
         git \
+        openssh \
         tmux \
         zsh \
         ripgrep \
@@ -44,10 +45,18 @@ RUN printf '%s\n' \
         "$WARD_HOME/.cache" \
         "$WARD_HOME/.pi" \
         "$WARD_HOME/.oh-my-zsh" \
+    && install -d -o "$WARD_USER" -g "$WARD_USER" -m 0700 \
+        "$WARD_HOME/.ssh" \
+    && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \
+        "$WARD_HOME/.gitconfig" \
     && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \
         "$WARD_HOME/.tmux.conf" \
     && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \
         "$WARD_HOME/.zshrc" \
+    && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \
+        "$WARD_HOME/.ssh/allowed_signers" \
+    && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \
+        "$WARD_HOME/.ssh/known_hosts" \
     && rm -rf /var/cache/pacman/pkg/*
 
 ENV HOME=${WARD_HOME} \

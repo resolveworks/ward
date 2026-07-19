@@ -48,11 +48,14 @@ The container is restarted only after a successful build.
 ## Attach
 
 ```sh
-podman exec --user agent --interactive --tty ward \
+podman exec \
+    --env-file "$HOME/.config/containers/systemd/ward/ward.exec.env" \
+    --user agent --interactive --tty ward \
     tmux new-session -A -s ward
 ```
 
-The host and Ward share `.pi`; do not use it concurrently.
+`ward.exec.env` forwards the listed host environment variables to the tmux
+client.
 
 ## Remove
 

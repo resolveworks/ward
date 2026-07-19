@@ -17,7 +17,7 @@ state, not the network.
 
 ```sh
 sudo pacman --needed -S github-cli openssh podman tmux
-systemctl --user enable --now ssh-agent.socket
+systemctl --user enable --now ssh-agent.socket podman.socket
 ```
 
 The ward unit syncs the `ward-github-token` podman secret from `gh auth

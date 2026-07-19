@@ -2,6 +2,8 @@
 Description=Ward rootless pi and tmux environment
 Requires=ssh-agent.socket
 After=ssh-agent.socket
+Requires=podman.socket
+After=podman.socket
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
@@ -21,6 +23,7 @@ Volume=%h/.gitconfig:%h/.gitconfig:ro
 Volume=%h/.ssh/allowed_signers:%h/.ssh/allowed_signers:ro
 Volume=%h/.ssh/known_hosts:%h/.ssh/known_hosts:ro
 Volume=%t/ssh-agent.socket:/run/user/1000/ssh-agent.socket
+Volume=%t/podman/podman.sock:/run/user/1000/podman/podman.sock
 Volume=%h/.pi:%h/.pi
 Volume=%h/.local/share/pnpm:%h/.local/share/pnpm
 Volume=%h/.cache/uv:%h/.cache/uv
@@ -34,6 +37,7 @@ DropCapability=all
 Secret=ward-github-token,type=env,target=GH_TOKEN
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=SSH_AUTH_SOCK=/run/user/1000/ssh-agent.socket
+Environment=CONTAINER_HOST=unix:///run/user/1000/podman/podman.sock
 Environment=UV_LINK_MODE=copy
 LogDriver=journald
 StopTimeout=30

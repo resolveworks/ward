@@ -18,6 +18,7 @@ RUN printf '%s\n' \
         git \
         github-cli \
         openssh \
+        podman \
         tmux \
         zsh \
         ripgrep \
@@ -57,6 +58,7 @@ RUN printf '%s\n' \
     && install -d -o "$WARD_USER" -g "$WARD_USER" -m 0700 \
         "$WARD_HOME/.ssh" \
         /run/user/1000 \
+        /run/user/1000/podman \
     && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \
         "$WARD_HOME/.gitconfig" \
     && install -o "$WARD_USER" -g "$WARD_USER" -m 0644 /dev/null \

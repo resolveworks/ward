@@ -41,6 +41,8 @@ StopTimeout=30
 [Service]
 RuntimeDirectory=ward
 RuntimeDirectoryMode=0700
+# Source GH_TOKEN from the host gh credential store at every start.
+ExecStartPre=/usr/bin/sh -c 'gh auth token | tr -d "\n" | podman secret create --replace ward-github-token -'
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=45s

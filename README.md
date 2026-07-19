@@ -17,12 +17,12 @@ state, not the network.
 
 ```sh
 sudo pacman --needed -S github-cli openssh podman tmux
-sudo loginctl enable-linger "$USER"
 systemctl --user enable --now ssh-agent.socket
-install -d -m 0755 "$HOME/.cache/uv"
-gh auth login --git-protocol ssh --skip-ssh-key
-gh auth token | tr -d '\n' | podman secret create --replace ward-github-token -
 ```
+
+The ward unit syncs the `ward-github-token` podman secret from `gh auth
+token` at every start and exposes it in the container as `GH_TOKEN`. The
+start fails when gh is not authenticated on the host.
 
 ## Deploy
 

@@ -23,7 +23,7 @@ outside contributions without broadening its scope or supported environments.
 - `.containerignore`: build context
 - `ward.build`: image build
 - `ward.container`: runtime, mounts, isolation, and limits
-- `README.md`: contract and commands
+- `README.md`: overview and commands
 
 Ward has no custom lifecycle tooling; use the host, systemd, and Podman commands
 in `README.md`.
@@ -47,9 +47,8 @@ in `README.md`.
 Keep packages in the single `pacman -Syu` transaction. Update the Arch base tag,
 digest, and Archive snapshot together.
 
-Keep runtime policy in `ward.container`. Update `README.md` only for changes to
-the contract or commands. Never commit secrets, host state, container storage,
-or `.pi` contents. Preserve unrelated working-tree changes.
+Keep runtime policy in `ward.container`. Never commit secrets, host state,
+container storage, or `.pi` contents. Preserve unrelated working-tree changes.
 
 ## Validation
 

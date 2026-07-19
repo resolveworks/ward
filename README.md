@@ -1,31 +1,17 @@
 # Ward
 
 Ward is a disposable Arch Linux environment for pi and its shared tmux server.
-It runs as a rootless Podman container under the user systemd instance.
+It runs as a rootless Podman container under the user systemd instance. It
+exists to give a coding agent an exact, reproducible toolchain that can be
+rebuilt and discarded at any time, without touching host state.
 
-## Contract
-
-Ward requires an x86_64 Arch Linux host with Podman, OpenSSH, tmux compatible
-with the image's tmux server, cgroup v2, user namespaces, at least 65536
-subordinate UIDs/GIDs, and lingering enabled. It also requires `~/.gitconfig`,
-`~/.ssh/allowed_signers`, `~/.ssh/known_hosts`, and the user OpenSSH agent at
-`$XDG_RUNTIME_DIR/ssh-agent.socket`; required keys must be loaded in that agent.
-
-Host bind mounts provide projects, configuration, and persistent development
-state. Home-directory mounts use the same paths on the host and in the
-container. Mounts and resource limits are defined in `ward.container`.
-`~/.gitconfig`, `~/.ssh/allowed_signers`, and `~/.ssh/known_hosts` are
-read-only. Private SSH keys are not mounted; Ward uses the host agent for Git
-authentication and commit signing. Any process in Ward can request agent
-operations while the container is running.
-
-The tmux server socket is exposed at `$XDG_RUNTIME_DIR/ward/tmux.sock`; the tmux
-client runs on the host. All other container state is discarded on stop. The
-container account uses the host user name and home path, runs as 1000:1000 under
-`keep-id`, and drops all capabilities.
-
-Networking is shared with the host. Host loopback, abstract Unix sockets, and
-host ports are therefore shared as well; Ward is not a network boundary.
+The image pins an Arch snapshot and installs the full package set in one
+transaction. The container runs rootless with dropped capabilities and private
+namespaces; its writable root is discarded on stop, and only declared bind
+mounts — projects, selected configuration, and agent state — persist. The
+tmux server runs in the container and exposes its socket, so sessions are
+driven by host clients. Networking is shared with the host; Ward isolates
+state, not the network.
 
 ## Host setup
 

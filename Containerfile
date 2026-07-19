@@ -16,6 +16,7 @@ RUN printf '%s\n' \
         base \
         base-devel \
         git \
+        github-cli \
         openssh \
         tmux \
         zsh \

@@ -16,10 +16,12 @@ state, not the network.
 ## Host setup
 
 ```sh
-sudo pacman --needed -S openssh podman tmux
+sudo pacman --needed -S github-cli openssh podman tmux
 sudo loginctl enable-linger "$USER"
 systemctl --user enable --now ssh-agent.socket
 install -d -m 0755 "$HOME/.cache/uv"
+gh auth login --git-protocol ssh --skip-ssh-key
+gh auth token | tr -d '\n' | podman secret create --replace ward-github-token -
 ```
 
 ## Deploy
@@ -57,4 +59,5 @@ systemctl --user stop ward.service ward-build.service
 rm -- "$HOME/.config/containers/systemd/ward"
 systemctl --user daemon-reload
 podman image rm localhost/ward:latest
+podman secret rm ward-github-token
 ```

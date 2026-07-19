@@ -31,6 +31,7 @@ Volume=%t/ward:/run/ward
 PidsLimit=4096
 NoNewPrivileges=true
 DropCapability=all
+Secret=ward-github-token,type=env,target=GH_TOKEN
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=SSH_AUTH_SOCK=/run/user/1000/ssh-agent.socket
 Environment=UV_LINK_MODE=copy

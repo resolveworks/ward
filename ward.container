@@ -26,6 +26,7 @@ Volume=%t/ssh-agent.socket:/run/user/1000/ssh-agent.socket
 Volume=%t/podman/podman.sock:/run/user/1000/podman/podman.sock
 Volume=%h/.pi:%h/.pi
 Volume=%h/.local/share/pnpm:%h/.local/share/pnpm
+Volume=%h/.local/share/uv:%h/.local/share/uv
 Volume=%h/.cache/uv:%h/.cache/uv
 Volume=%h/.tmux.conf:%h/.tmux.conf:ro
 Volume=%h/.zshrc:%h/.zshrc:ro

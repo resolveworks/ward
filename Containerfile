@@ -26,6 +26,7 @@ RUN printf '%s\n' \
         curl \
         nodejs \
         pnpm \
+        postgresql-libs \
         python \
         uv \
         alsa-lib \
